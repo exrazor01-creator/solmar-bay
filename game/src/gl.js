@@ -1,11 +1,11 @@
 import { clamp, lerp } from './random.js';
-function matPerspective(fov, aspect, near, far) {
+function mPersp(fov, aspect, near, far) {
   const f = 1 / Math.tan(fov / 2), nf = 1 / (near - far);
   const m = new Float32Array(16);
   m[0] = f / aspect; m[5] = f; m[10] = (far + near) * nf; m[11] = -1; m[14] = 2 * far * near * nf;
   return m;
 }
-function matLookAt(eye, center, up) {
+function mLook(eye, center, up) {
   let zx = eye[0] - center[0], zy = eye[1] - center[1], zz = eye[2] - center[2];
   let zl = Math.hypot(zx, zy, zz) || 1; zx /= zl; zy /= zl; zz /= zl;
   let xx = up[1] * zz - up[2] * zy, xy = up[2] * zx - up[0] * zz, xz = up[0] * zy - up[1] * zx;
@@ -26,57 +26,57 @@ function matMul(a, b) {
   }
   return o;
 }
-const norm3 = (v) => { const l = Math.hypot(v[0], v[1], v[2]) || 1; return [v[0] / l, v[1] / l, v[2] / l]; };
-const SKY_KEYS = [
-  { t: 0.00, sky: [0.05, 0.07, 0.16], sun: [0.22, 0.28, 0.50], amb: [0.16, 0.18, 0.28], dir: [0.3, 0.6, 0.4] },
-  { t: 0.20, sky: [0.05, 0.07, 0.16], sun: [0.22, 0.28, 0.50], amb: [0.16, 0.18, 0.28], dir: [0.3, 0.6, 0.4] },
-  { t: 0.27, sky: [0.92, 0.58, 0.42], sun: [1.0, 0.55, 0.30], amb: [0.34, 0.28, 0.32], dir: [0.9, 0.25, 0.3] },
+const n3 = (v) => { const l = Math.hypot(v[0], v[1], v[2]) || 1; return [v[0] / l, v[1] / l, v[2] / l]; };
+const SKY = [
+  { t: 0.00, sky: [0.05, 0.07, 0.16], sun: [0.35, 0.40, 0.60], amb: [0.30, 0.32, 0.42], dir: [0.3, 0.6, 0.4] },
+  { t: 0.20, sky: [0.05, 0.07, 0.16], sun: [0.35, 0.40, 0.60], amb: [0.30, 0.32, 0.42], dir: [0.3, 0.6, 0.4] },
+  { t: 0.27, sky: [0.96, 0.52, 0.38], sun: [1.0, 0.55, 0.30], amb: [0.42, 0.30, 0.38], dir: [0.9, 0.25, 0.3] },
   { t: 0.38, sky: [0.55, 0.76, 0.95], sun: [1.0, 0.95, 0.85], amb: [0.55, 0.55, 0.55], dir: [0.5, 1.0, 0.4] },
   { t: 0.60, sky: [0.55, 0.76, 0.95], sun: [1.0, 0.95, 0.85], amb: [0.55, 0.55, 0.55], dir: [-0.4, 1.0, 0.4] },
-  { t: 0.72, sky: [0.90, 0.46, 0.30], sun: [1.0, 0.55, 0.28], amb: [0.36, 0.30, 0.34], dir: [-0.9, 0.28, 0.3] },
-  { t: 0.80, sky: [0.05, 0.07, 0.16], sun: [0.22, 0.28, 0.50], amb: [0.16, 0.18, 0.28], dir: [-0.3, 0.6, 0.4] },
-  { t: 1.00, sky: [0.05, 0.07, 0.16], sun: [0.22, 0.28, 0.50], amb: [0.16, 0.18, 0.28], dir: [-0.3, 0.6, 0.4] },
+  { t: 0.72, sky: [0.95, 0.45, 0.32], sun: [1.0, 0.55, 0.28], amb: [0.42, 0.30, 0.38], dir: [-0.9, 0.28, 0.3] },
+  { t: 0.80, sky: [0.05, 0.07, 0.16], sun: [0.35, 0.40, 0.60], amb: [0.30, 0.32, 0.42], dir: [-0.3, 0.6, 0.4] },
+  { t: 1.00, sky: [0.05, 0.07, 0.16], sun: [0.35, 0.40, 0.60], amb: [0.30, 0.32, 0.42], dir: [-0.3, 0.6, 0.4] },
 ];
 export function skyAt(tod) {
-  let a = SKY_KEYS[0], b = SKY_KEYS[SKY_KEYS.length - 1];
-  for (let i = 0; i < SKY_KEYS.length - 1; i += 1) {
-    if (tod >= SKY_KEYS[i].t && tod <= SKY_KEYS[i + 1].t) { a = SKY_KEYS[i]; b = SKY_KEYS[i + 1]; break; }
+  let a = SKY[0], b = SKY[SKY.length - 1];
+  for (let i = 0; i < SKY.length - 1; i += 1) {
+    if (tod >= SKY[i].t && tod <= SKY[i + 1].t) { a = SKY[i]; b = SKY[i + 1]; break; }
   }
   const f = b.t === a.t ? 0 : clamp((tod - a.t) / (b.t - a.t), 0, 1);
   const mix = (x, y) => [lerp(x[0], y[0], f), lerp(x[1], y[1], f), lerp(x[2], y[2], f)];
   const night = tod < 0.22 || tod > 0.78;
   return {
     sky: mix(a.sky, b.sky), fog: mix(a.sky, b.sky), sun: mix(a.sun, b.sun), amb: mix(a.amb, b.amb),
-    dir: norm3(mix(a.dir, b.dir)), night, fogNear: night ? 320 : 500, fogFar: night ? 1700 : 2600,
+    dir: n3(mix(a.dir, b.dir)), night, fogNear: night ? 500 : 500, fogFar: night ? 2200 : 2600,
   };
 }
-const colorCache = new Map();
-export function parseColor(c) {
+const cCache = new Map();
+export function pCol(c) {
   if (Array.isArray(c)) return c.length === 3 ? [c[0], c[1], c[2], 1] : c;
-  let hit = colorCache.get(c);
+  let hit = cCache.get(c);
   if (hit) return hit;
   const n = parseInt(c.slice(1), 16);
   hit = [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255, 1];
-  colorCache.set(c, hit);
+  cCache.set(c, hit);
   return hit;
 }
 const VS = `attribute vec3 aPos; attribute vec4 aColor; attribute vec3 aNormal;
-uniform mat4 uVP; uniform vec3 uCamPos; uniform vec3 uLightDir; uniform vec3 uLightCol;
-uniform vec3 uAmbient; uniform float uFogNear; uniform float uFogFar;
+uniform mat4 uVP; uniform vec3 uCP; uniform vec3 uLD; uniform vec3 uLC;
+uniform vec3 uAM; uniform float uFN; uniform float uFF;
 varying vec4 vColor; varying float vFog;
 void main(){
   vec3 n = normalize(aNormal);
-  float diff = max(dot(n, uLightDir), 0.0);
-  vec3 lit = aColor.rgb * (uAmbient + uLightCol * diff);
+  float diff = max(dot(n, uLD), 0.0);
+  vec3 lit = aColor.rgb * (uAM + uLC * diff);
   vColor = vec4(lit, aColor.a);
-  float d = distance(aPos, uCamPos);
-  vFog = clamp((d - uFogNear) / (uFogFar - uFogNear), 0.0, 1.0);
+  float d = distance(aPos, uCP);
+  vFog = clamp((d - uFN) / (uFF - uFN), 0.0, 1.0);
   gl_Position = uVP * vec4(aPos, 1.0);
 }`;
 const FS = `precision mediump float;
-varying vec4 vColor; varying float vFog; uniform vec3 uFogColor;
-void main(){ vec3 c = mix(vColor.rgb, uFogColor, vFog); gl_FragColor = vec4(c, vColor.a); }`;
-export function createRenderer(canvas) {
+varying vec4 vColor; varying float vFog; uniform vec3 uFC;
+void main(){ vec3 c = mix(vColor.rgb, uFC, vFog); gl_FragColor = vec4(c, vColor.a); }`;
+export function mkRenderer(canvas) {
   const gl = canvas.getContext('webgl', { preserveDrawingBuffer: true, antialias: true, alpha: false });
   if (!gl) throw new Error('WebGL is not available');
   const compile = (type, src) => {
@@ -93,8 +93,8 @@ export function createRenderer(canvas) {
   gl.useProgram(prog);
   const loc = (n) => gl.getUniformLocation(prog, n);
   const U = {
-    vp: loc('uVP'), cam: loc('uCamPos'), ldir: loc('uLightDir'), lcol: loc('uLightCol'),
-    amb: loc('uAmbient'), fogc: loc('uFogColor'), fogn: loc('uFogNear'), fogf: loc('uFogFar'),
+    vp: loc('uVP'), cam: loc('uCP'), ldir: loc('uLD'), lcol: loc('uLC'),
+    amb: loc('uAM'), fogc: loc('uFC'), fogn: loc('uFN'), fogf: loc('uFF'),
   };
   const A = { pos: gl.getAttribLocation(prog, 'aPos'), col: gl.getAttribLocation(prog, 'aColor'), nrm: gl.getAttribLocation(prog, 'aNormal') };
   const bufPos = gl.createBuffer(), bufCol = gl.createBuffer(), bufNrm = gl.createBuffer(), bufIdx = gl.createBuffer();
@@ -107,13 +107,13 @@ export function createRenderer(canvas) {
     pos: [], col: [], nrm: [], idx: [], vc: 0, tris: 0,
     setCamera(eye, target) {
       this.eye = eye;
-      const view = matLookAt(eye, target, [0, 1, 0]);
-      const proj = matPerspective(this.fov, this.aspect, 1, 6000);
+      const view = mLook(eye, target, [0, 1, 0]);
+      const proj = mPersp(this.fov, this.aspect, 1, 6000);
       this.vp = matMul(proj, view);
-      this.fwd = norm3([target[0] - eye[0], target[1] - eye[1], target[2] - eye[2]]);
-      this.right = norm3([-this.fwd[2], 0, this.fwd[0]]);
+      this.fwd = n3([target[0] - eye[0], target[1] - eye[1], target[2] - eye[2]]);
+      this.right = n3([-this.fwd[2], 0, this.fwd[0]]);
       const cr = this.right, f = this.fwd;
-      this.up = norm3([cr[1] * f[2] - cr[2] * f[1], cr[2] * f[0] - cr[0] * f[2], cr[0] * f[1] - cr[1] * f[0]]);
+      this.up = n3([cr[1] * f[2] - cr[2] * f[1], cr[2] * f[0] - cr[0] * f[2], cr[0] * f[1] - cr[1] * f[0]]);
     },
     begin(sky) {
       this.pos.length = 0; this.col.length = 0; this.nrm.length = 0; this.idx.length = 0; this.vc = 0; this.tris = 0;
@@ -138,7 +138,7 @@ export function createRenderer(canvas) {
     },
     quad(p0, p1, p2, p3, color, n) {
       const cs = Array.isArray(color) && Array.isArray(color[0]) ? color : [color, color, color, color];
-      const c0 = parseColor(cs[0]), c1 = parseColor(cs[1]), c2 = parseColor(cs[2]), c3 = parseColor(cs[3]);
+      const c0 = pCol(cs[0]), c1 = pCol(cs[1]), c2 = pCol(cs[2]), c3 = pCol(cs[3]);
       const base = this.vc;
       this.vert(p0, c0, n); this.vert(p1, c1, n); this.vert(p2, c2, n); this.vert(p3, c3, n);
       this.idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
@@ -148,7 +148,7 @@ export function createRenderer(canvas) {
       this.quad([x, y, z], [x + w, y, z], [x + w, y, z + d], [x, y, z + d], color, [0, 1, 0]);
     },
     box(cx, cy, cz, w, h, d, color, ry) {
-      const c = parseColor(color);
+      const c = pCol(color);
       const hx = w / 2, hy = h / 2, hz = d / 2;
       const cos = Math.cos(ry || 0), sin = Math.sin(ry || 0);
       const rot = (x, z) => [cx + x * cos - z * sin, cz + x * sin + z * cos];
@@ -168,7 +168,7 @@ export function createRenderer(canvas) {
       }
     },
     cyl(x, y, z, r, h, color, sides) {
-      const s = sides || 8, c = parseColor(color);
+      const s = sides || 8, c = pCol(color);
       const top = [], bot = [];
       for (let i = 0; i < s; i += 1) {
         const a = (i / s) * Math.PI * 2;

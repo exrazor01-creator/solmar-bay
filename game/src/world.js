@@ -1,6 +1,7 @@
 import { AVENUES, STREETS, ROAD_W, WORLD, BEACH_Z, WATER_Z, PALETTE } from './config.js';
 import { range, int, pick, chance } from './random.js';
 const ROOFS = [PALETTE.roofA, PALETTE.roofB, PALETTE.roofC, PALETTE.roofD, PALETTE.roofE, PALETTE.roofF];
+const AWN = ['#e74c3c', '#3498db', '#f39c12', '#2ecc71', '#9b59b6', '#e67e22'];
 export function districtAt(x, z) {
   if (z >= BEACH_Z) return 'Beach';
   if (x >= 2830 && z < 760) return 'Airport';
@@ -20,6 +21,8 @@ export function buildWorld(rng) {
   const buildings = [];
   const trees = [];
   const parks = [];
+  const stalls = [];
+  const signs = [];
   buildings.push({ x: 1700, z: 1200, w: 200, d: 200, color: PALETTE.tower, floors: 12, seed: 7, landmark: 'tower' });
   buildings.push({ x: 3030, z: 2080, w: 40, d: 40, color: '#ecf0f1', floors: 3, seed: 11, landmark: 'lighthouse' });
   buildings.push({ x: 2900, z: 400, w: 220, d: 140, color: '#b0bec5', floors: 3, seed: 21, landmark: 'terminal' });
@@ -74,15 +77,31 @@ export function buildWorld(rng) {
       }
     }
   }
-  for (let i = 0; i < 70; i += 1) {
+  for (let i = 0; i < 110; i += 1) {
     const av = pick(rng, AVENUES), st = pick(rng, STREETS);
     const side = chance(rng, 0.5);
     trees.push(side
       ? { x: av + (chance(rng, 0.5) ? 1 : -1) * (ROAD_W / 2 + 16), z: range(rng, 80, BEACH_Z - 80), s: range(rng, 0.8, 1.3) }
       : { x: range(rng, 80, WORLD.w - 80), z: st + (chance(rng, 0.5) ? 1 : -1) * (ROAD_W / 2 + 16), s: range(rng, 0.8, 1.3) });
   }
-  for (let i = 0; i < 22; i += 1) trees.push({ x: range(rng, 120, WORLD.w - 120), z: range(rng, BEACH_Z + 30, WATER_Z - 20), s: range(rng, 0.8, 1.3) });
-  return { buildings, trees, parks };
+  for (let i = 0; i < 30; i += 1) trees.push({ x: range(rng, 120, WORLD.w - 120), z: range(rng, BEACH_Z + 30, WATER_Z - 20), s: range(rng, 0.8, 1.3) });
+  for (let i = 0; i < 12; i += 1) {
+    const sx = 480 + i * 62 + range(rng, -8, 8);
+    const sz = i % 2 === 0 ? 1438 : 1562;
+    stalls.push({ x: sx, z: sz, ry: i % 2 === 0 ? 0 : Math.PI, c1: pick(rng, AWN), c2: pick(rng, ['#a67c52', '#8a6b46', '#6c7a89']) });
+  }
+  for (const b of buildings) {
+    if (b.landmark) {
+      const cx = b.x + b.w / 2;
+      signs.push({ x: cx, z: b.z + b.d + 4, w: Math.min(b.w * 0.6, 120), c: pick(rng, ['#ff2e88', '#00e5ff', '#ffd23e', '#2ecc71', '#ff9f43']) });
+    }
+  }
+  for (let i = 0; i < 14 && signs.length < 30; i += 1) {
+    const b = buildings[11 + Math.floor(rng() * (buildings.length - 11))];
+    if (!b || b.landmark) continue;
+    signs.push({ x: b.x + b.w / 2, z: b.z + b.d + 4, w: Math.min(b.w * 0.55, 90), c: pick(rng, AWN) });
+  }
+  return { buildings, trees, parks, stalls, signs };
 }
 export function onRoad(x, z) {
   if (z >= BEACH_Z) return false;
@@ -121,6 +140,13 @@ export function collideCircle(G, x, z, r) {
         if (m === pl) x = b.x - r; else if (m === pr) x = b.x + b.w + r;
         else if (m === pt) z = b.z - r; else z = b.z + b.d + r;
       }
+    }
+  }
+  for (const s of G.world.stalls) {
+    const dx = x - s.x, dz = z - s.z, d2 = dx * dx + dz * dz;
+    if (d2 < (r + 20) * (r + 20)) {
+      hit = true;
+      if (d2 > 0.01) { const d = Math.sqrt(d2), push = (r + 20 - d) / d; x += dx * push; z += dz * push; }
     }
   }
   const nx = Math.max(r, Math.min(WORLD.w - r, x));

@@ -35,7 +35,7 @@ export function spawnTraffic(G) {
     const pt = randomRoadPoint(G.rng);
     spawnCar(G, pt.x + range(G.rng, -20, 20), pt.z + range(G.rng, -20, 20), pick(G.rng, TRAFFIC_KINDS), 'traffic');
   }
-  for (let i = 0; i < 10; i += 1) {
+  for (let i = 0; i < 18; i += 1) {
     const pt = randomRoadPoint(G.rng);
     if (dist(pt.x, pt.z, 2800, 300) < 180 || dist(pt.x, pt.z, 400, 2290) < 180) continue;
     const c = spawnCar(G, pt.x, pt.z, pick(G.rng, PARKED_KINDS), 'parked');
@@ -51,6 +51,14 @@ export function spawnPeds(G) {
       x: pt.x + range(G.rng, -60, 60), z: pt.z + range(G.rng, -60, 60),
       angle: G.rng() * Math.PI * 2, speed: range(G.rng, 40, 70), state: 'walk',
       kind: 'walker', hp: 100, tx: pt.x, tz: pt.z, waitT: 0, fleeT: 0, seed: G.rng(),
+      color: pick(G.rng, ['#e74c3c', '#3498db', '#2ecc71', '#f39c12', '#9b59b6', '#ecf0f1']),
+    });
+  }
+  for (let i = 0; i < 8; i += 1) {
+    G.peds.push({
+      x: 520 + i * 78 + range(G.rng, -14, 14), z: (i % 2 === 0 ? 1448 : 1552) + range(G.rng, -8, 8),
+      angle: G.rng() * Math.PI * 2, speed: range(G.rng, 30, 55), state: 'walk',
+      kind: 'walker', hp: 100, tx: 520 + i * 78, tz: i % 2 === 0 ? 1448 : 1552, waitT: 2 + G.rng() * 4, fleeT: 0, seed: G.rng(),
       color: pick(G.rng, ['#e74c3c', '#3498db', '#2ecc71', '#f39c12', '#9b59b6', '#ecf0f1']),
     });
   }

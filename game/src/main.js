@@ -1,8 +1,7 @@
-// Solmar Bay — the game itself: state, the fixed-step loop, menus, staging and the
 import { VIEW, WORLD, STEP, START, TUNE, PLACES, MISSION_COUNT } from './config.js';
 import { mulberry32 } from './random.js';
 import { buildWorld } from './world.js';
-import { createRenderer } from './gl.js';
+import { mkRenderer } from './gl.js';
 import { render3D, updateCamera } from './render3d.js';
 import { createInput, take, endFrame } from './input.js';
 import { createAudio } from './audio.js';
@@ -21,7 +20,7 @@ canvas.width = VIEW.w; canvas.height = VIEW.h;
 const hudCanvas = document.getElementById('hud');
 hudCanvas.width = VIEW.w; hudCanvas.height = VIEW.h;
 const hctx = hudCanvas.getContext('2d');
-const R = createRenderer(canvas);
+const R = mkRenderer(canvas);
 const params = new URLSearchParams(location.search);
 const SEED = Number(params.get('seed') || 7);
 const SHOT = params.get('shot') || '';
@@ -29,7 +28,7 @@ function freshState(seed) {
   const rng = mulberry32(seed);
   const G = {
     seed, rng, world: buildWorld(rng), input: createInput(canvas), audio: createAudio(),
-    canvas, state: 'title', time: 0, timeOfDay: 0.25, frozen: false,
+    canvas, state: 'title', time: 0, timeOfDay: 0.70, frozen: false,
     player: {
       x: START.x, z: START.z, angle: -Math.PI / 2, walkAngle: 0, hp: TUNE.playerHp, maxHp: TUNE.playerHp,
       money: START.money, bank: 0, ammo: START.ammo, shells: 0, weapon: 'pistol', ownsShotgun: false,
@@ -101,7 +100,7 @@ function startStory() {
     p.ownsRifle = !!save.ownsRifle; p.ownsSniper = !!save.ownsSniper;
     p.rifleMag = save.rifleMag || 0; p.sniperMag = save.sniperMag || 0; p.ownsBat = !!save.ownsBat;
     p.armor = save.armor || 0; p.nitro = save.nitro || 0;
-    p.x = save.x; p.z = save.z ?? save.y; G.timeOfDay = save.timeOfDay ?? 0.25;
+    p.x = save.x; p.z = save.z ?? save.y; G.timeOfDay = save.timeOfDay ?? 0.70;
     p.char = save.char || 'vic'; p.maxHp = p.char === 'luna' ? 85 : 100;
     p.outfit = save.outfit || 0; p.safehouse = !!save.safehouse;
     if (save.radio !== undefined) { G.settings.radio = save.radio; G.audio.setRadio(save.radio); }
@@ -195,7 +194,7 @@ function frame(now) {
 }
 if (SHOT) {
   const result = stageShot(SHOT, G, (dt) => stepPlaying(dt));
-  G.state = 'shot'; G.frozen = true;
+  G.state = result.screen === 'play' ? 'shot' : result.screen; G.frozen = true;
   render(G);
   window.__SHOT_READY = true;
   window.__SHOT_SCREEN = result.screen;

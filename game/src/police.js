@@ -1,10 +1,14 @@
-import { TUNE, WORLD } from './config.js';
+import { TUNE, WORLD, POLICE_NAMES } from './config.js';
 import { clamp, dist, angleDiff } from './random.js';
 import { collideCircle } from './world.js';
 import { damagePlayer, damageCar, addParticles } from './combat.js';
 import { spawnCar } from './traffic.js';
 import { spawnRoadblock, spawnHeli } from './vehicles.js';
 export const MAX_STARS = 6;
+function callsign(G) {
+  G.callIdx = (G.callIdx || 0) + 1;
+  return POLICE_NAMES[(G.callIdx - 1) % POLICE_NAMES.length];
+}
 export function addWanted(G, points, why) {
   const w = G.wanted;
   w.points = clamp(w.points + points, 0, 12);
@@ -30,13 +34,13 @@ export function updateWanted(G, dt) {
     G.roadblockSet = true;
     spawnRoadblock(G);
     const heli = spawnHeli(G, G.player.x + 600, G.player.z - 600, 'police');
-    heli.y = 80; heli.alt = 80;
+    heli.y = 80; heli.alt = 80; heli.name = callsign(G);
   }
   if (w.stars < 4) G.roadblockSet = false;
   const helis = G.cars.filter((c) => c.kind === 'heli' && c.driver === 'police' && !c.dead).length;
   if (w.stars >= 6 && helis < 2) {
     const heli = spawnHeli(G, G.player.x - 600, G.player.z + 600, 'police');
-    heli.y = 90; heli.alt = 90;
+    heli.y = 90; heli.alt = 90; heli.name = callsign(G);
     G.banner = { text: 'SIX STARS — SWAT is on the ground, two choppers in the air!', t: 4 };
   }
   const seen = G.peds.some((p) => (p.kind === 'cop' || p.kind === 'swat') && p.state !== 'dead' && copSeesPlayer(G, p))
@@ -67,7 +71,7 @@ function spawnFootCop(G) {
   G.peds.push({
     x, z, angle: 0, speed: swat ? 235 : TUNE.copFootSpeed, state: 'walk',
     kind: swat ? 'swat' : 'cop', hp: swat ? 150 : 100, tx: x, tz: z, waitT: 0, fleeT: 0,
-    color: swat ? '#2d3436' : '#1c4ed8', seed: G.rng(), punchCd: 0,
+    color: swat ? '#2d3436' : '#1c4ed8', seed: G.rng(), punchCd: 0, name: callsign(G),
   });
 }
 function spawnPoliceCar(G) {
@@ -75,7 +79,7 @@ function spawnPoliceCar(G) {
   const x = clamp(G.player.x + Math.cos(a) * d, 80, WORLD.w - 80);
   const z = clamp(G.player.z + Math.sin(a) * d, 80, WORLD.h - 80);
   const c = spawnCar(G, x, z, 'police', 'police');
-  c.color = '#1e40af'; c.speed = 240;
+  c.color = '#1e40af'; c.speed = 240; c.name = callsign(G);
 }
 export function updatePolice(G, dt) {
   const p = G.player;

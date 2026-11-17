@@ -1,10 +1,14 @@
-import { CAR_STATS, TUNE, WORLD, WATER_Z } from './config.js';
+import { CAR_STATS, TUNE, WORLD, WATER_Z, POLICE_NAMES } from './config.js';
 import { clamp, dist, angleDiff } from './random.js';
 import { collideCircle, nearestIntersection } from './world.js';
 import { damageCar, addParticles, spawnBullet3D } from './combat.js';
 import { spawnCar } from './traffic.js';
 import { take } from './input.js';
 let nextHeliId = 9000;
+function callsign(G) {
+  G.callIdx = (G.callIdx || 0) + 1;
+  return POLICE_NAMES[(G.callIdx - 1) % POLICE_NAMES.length];
+}
 export function spawnHeli(G, x, z, driver) {
   const s = CAR_STATS.heli;
   const heli = {
@@ -20,7 +24,7 @@ export function spawnHeli(G, x, z, driver) {
 export function spawnBoat(G, x, z, driver) {
   const s = CAR_STATS.boat;
   const boat = {
-    id: nextHeliId, x, z, y: 0, angle: 0, speed: 0, color: '#ecf0f1', // faces east, along the coast
+    id: nextHeliId, x, z, y: 0, angle: 0, speed: 0, color: '#ecf0f1',
     kind: 'boat', driver: driver || 'parked', hp: s.hp, maxHp: s.hp, maxSpeed: s.max,
     accel: s.accel, turn: s.turn, radius: s.r, rotor: 0, dead: false,
     target: null, waitT: 0, honkT: 0, shootCd: 0, wakeT: 0,
@@ -148,7 +152,7 @@ export function spawnRoadblock(G) {
     : [{ x: it.x - 30, z: it.z, a: 0 }, { x: it.x + 30, z: it.z, a: 0 }];
   for (const s of spots) {
     const c = spawnCar(G, s.x, s.z, 'police', 'police');
-    c.color = '#1e40af'; c.angle = s.a; c.speed = 0; c.roadblock = true;
+    c.color = '#1e40af'; c.angle = s.a; c.speed = 0; c.roadblock = true; c.name = callsign(G);
   }
   G.roadblock = { x: it.x, z: it.z, t: 0 };
   G.banner = { text: 'ROADBLOCK AHEAD — the force sealed the street!', t: 3 };

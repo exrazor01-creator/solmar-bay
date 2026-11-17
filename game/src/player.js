@@ -1,4 +1,3 @@
-// Solmar Bay — the player, on foot and behind the wheel. Movement, aiming (the mouse
 import { TUNE, WORLD, WEAPONS, WEAPON_ORDER, CHARS, GUN_H, PLACES } from './config.js';
 import { clamp, dist } from './random.js';
 import { collideCircle } from './world.js';
@@ -107,38 +106,37 @@ function fireWeapon(G) {
 function buyShopItem(G, n) {
   const p = G.player, shop = G.shopNear;
   if (!shop) return;
-  const pay = (price, what) => {
-    if (p.money < price) { G.banner = { text: 'Not enough cash — go earn some first.', t: 2 }; return false; }
-    p.money -= price; G.audio.cash(); G.banner = { text: `${what} — $${price}.`, t: 2.5 }; return true;
+  const noCash = () => { G.banner = { text: 'Not enough cash — go earn some first.', t: 2 }; };
+  const buy = (price, apply, msg) => {
+    if (p.money < price) { noCash(); return; }
+    p.money -= price; apply(); G.audio.cash(); G.banner = { text: msg, t: 2.5 };
   };
   if (shop.kind === 'ammo') {
-    if (n === 1) { if (p.money >= TUNE.ammoPrice) { p.money -= TUNE.ammoPrice; p.ammo += TUNE.ammoPack; G.audio.cash(); G.banner = { text: `+${TUNE.ammoPack} ammo — $${TUNE.ammoPrice}. Stay safe out there.`, t: 2.5 }; } else G.banner = { text: 'Not enough cash — go earn some first.', t: 2 }; }
-    else if (n === 2) { if (p.money >= TUNE.medPrice) { p.money -= TUNE.medPrice; p.hp = p.maxHp || 100; G.audio.cash(); G.banner = { text: `Patched up — $${TUNE.medPrice}. Good as new.`, t: 2.5 }; } else G.banner = { text: 'Not enough cash — go earn some first.', t: 2 }; }
-    else if (n === 3) { if (p.money >= TUNE.armorPrice) { p.money -= TUNE.armorPrice; p.armor = Math.min(100, p.armor + TUNE.armorPack); G.audio.cash(); G.banner = { text: `+${TUNE.armorPack} armor — $${TUNE.armorPrice}.`, t: 2.5 }; } else G.banner = { text: 'Not enough cash — go earn some first.', t: 2 }; }
+    if (n === 1) buy(TUNE.ammoPrice, () => { p.ammo += TUNE.ammoPack; }, `+${TUNE.ammoPack} ammo — $${TUNE.ammoPrice}. Stay safe out there.`);
+    else if (n === 2) buy(TUNE.medPrice, () => { p.hp = p.maxHp || 100; }, `Patched up — $${TUNE.medPrice}. Good as new.`);
+    else if (n === 3) buy(TUNE.armorPrice, () => { p.armor = Math.min(100, p.armor + TUNE.armorPack); }, `+${TUNE.armorPack} armor — $${TUNE.armorPrice}.`);
     else if (n === 4) {
-      if (!p.ownsShotgun) {
-        if (pay(TUNE.shotgunPrice, `Shotgun bought (+${TUNE.shellPack} shells)`)) { p.ownsShotgun = true; p.shells += TUNE.shellPack; }
-      } else if (p.money >= TUNE.shellPrice) { p.money -= TUNE.shellPrice; p.shells += TUNE.shellPack; G.audio.cash(); G.banner = { text: `+${TUNE.shellPack} shells — $${TUNE.shellPrice}.`, t: 2.5 }; }
-      else G.banner = { text: 'Not enough cash — go earn some first.', t: 2 };
+      if (!p.ownsShotgun) buy(TUNE.shotgunPrice, () => { p.ownsShotgun = true; p.shells += TUNE.shellPack; }, `Shotgun bought (+${TUNE.shellPack} shells)`);
+      else buy(TUNE.shellPrice, () => { p.shells += TUNE.shellPack; }, `+${TUNE.shellPack} shells — $${TUNE.shellPrice}.`);
     }
-    else if (n === 5) { if (!p.ownsRifle) { if (pay(TUNE.riflePrice, 'Rifle bought (30-round mag)')) { p.ownsRifle = true; p.rifleMag = 30; } } else G.banner = { text: 'You already own the rifle — press R to reload it.', t: 2 }; }
-    else if (n === 6) { if (!p.ownsSniper) { if (pay(TUNE.sniperPrice, 'Sniper bought (5-round mag)')) { p.ownsSniper = true; p.sniperMag = 5; } } else G.banner = { text: 'You already own the sniper — press R to reload it.', t: 2 }; }
-    else if (n === 7) { if (!p.ownsBat) { if (pay(TUNE.batPrice, 'Bat bought — punches hit twice as hard')) p.ownsBat = true; } else G.banner = { text: 'You already own the bat.', t: 2 }; }
+    else if (n === 5) { if (!p.ownsRifle) buy(TUNE.riflePrice, () => { p.ownsRifle = true; p.rifleMag = 30; }, 'Rifle bought (30-round mag)'); else G.banner = { text: 'You already own the rifle — press R to reload it.', t: 2 }; }
+    else if (n === 6) { if (!p.ownsSniper) buy(TUNE.sniperPrice, () => { p.ownsSniper = true; p.sniperMag = 5; }, 'Sniper bought (5-round mag)'); else G.banner = { text: 'You already own the sniper — press R to reload it.', t: 2 }; }
+    else if (n === 7) { if (!p.ownsBat) buy(TUNE.batPrice, () => { p.ownsBat = true; }, 'Bat bought — punches hit twice as hard'); else G.banner = { text: 'You already own the bat.', t: 2 }; }
   } else if (shop.kind === 'repair') {
-    if (n === 1) { if (p.inCar && p.money >= TUNE.repairPrice) { p.money -= TUNE.repairPrice; p.inCar.hp = p.inCar.maxHp; G.audio.cash(); G.banner = { text: `Car repaired — $${TUNE.repairPrice}.`, t: 2.5 }; } else G.banner = { text: 'Not enough cash — or no car to fix.', t: 2 }; }
-    else if (n === 2) { if (p.money >= TUNE.nitroPrice) { p.money -= TUNE.nitroPrice; p.nitro = (p.nitro || 0) + 1; G.audio.cash(); G.banner = { text: `Nitro tank fitted — $${TUNE.nitroPrice}. Hold Shift in a car to boost.`, t: 2.5 }; } else G.banner = { text: 'Not enough cash — go earn some first.', t: 2 }; }
+    if (n === 1) { if (p.inCar) buy(TUNE.repairPrice, () => { p.inCar.hp = p.inCar.maxHp; }, `Car repaired — $${TUNE.repairPrice}.`); else G.banner = { text: 'Not enough cash — or no car to fix.', t: 2 }; }
+    else if (n === 2) buy(TUNE.nitroPrice, () => { p.nitro = (p.nitro || 0) + 1; }, `Nitro tank fitted — $${TUNE.nitroPrice}. Hold Shift in a car to boost.`);
   } else if (shop.kind === 'atm') {
     if (n === 1) { if (p.money >= 100) { p.money -= 100; p.bank = (p.bank || 0) + 100; G.audio.cash(); G.banner = { text: `Deposited $100. Bank balance: $${p.bank}.`, t: 2.5 }; } else G.banner = { text: 'You need at least $100 cash to deposit.', t: 2 }; }
     else if (n === 2) { if ((p.bank || 0) >= 100) { p.bank -= 100; p.money += 100; G.audio.cash(); G.banner = { text: `Withdrew $100. Bank balance: $${p.bank}.`, t: 2.5 }; } else G.banner = { text: 'Not enough in the bank.', t: 2 }; }
     else if (n === 3) { if (p.money > 0) { p.bank = (p.bank || 0) + p.money; G.audio.cash(); G.banner = { text: `Deposited $${p.money}. Bank balance: $${p.bank}.`, t: 2.5 }; p.money = 0; } else G.banner = { text: 'No cash to deposit.', t: 2 }; }
   } else if (shop.kind === 'safehouse') {
-    if (!p.safehouse) { if (pay(TUNE.safehousePrice, 'Safehouse bought — the hideout is yours now')) { p.safehouse = true; } }
+    if (!p.safehouse) buy(TUNE.safehousePrice, () => { p.safehouse = true; }, 'Safehouse bought — the hideout is yours now');
     else { p.hp = p.maxHp || 100; G.audio.pickup(); G.banner = { text: 'Home sweet home — rested up to full health.', t: 2.5 }; }
   } else if (shop.kind === 'clothes') {
-    if (pay(TUNE.outfitPrice, 'New outfit')) { p.outfit = ((p.outfit || 0) + 1) % 3; }
+    buy(TUNE.outfitPrice, () => { p.outfit = ((p.outfit || 0) + 1) % 3; }, 'New outfit');
   } else if (shop.kind === 'diner') {
-    if (n === 1) { if (p.money >= TUNE.mealPrice) { p.money -= TUNE.mealPrice; p.hp = Math.min(p.maxHp || 100, p.hp + 50); G.audio.cash(); G.banner = { text: `A proper meal — +50 HP. $${TUNE.mealPrice}.`, t: 2.5 }; } else G.banner = { text: 'Not enough cash — go earn some first.', t: 2 }; }
-    else if (n === 2) { if (p.money >= TUNE.snackPrice) { p.money -= TUNE.snackPrice; p.hp = Math.min(p.maxHp || 100, p.hp + 25); G.audio.cash(); G.banner = { text: `A quick snack — +25 HP. $${TUNE.snackPrice}.`, t: 2.5 }; } else G.banner = { text: 'Not enough cash — go earn some first.', t: 2 }; }
+    if (n === 1) buy(TUNE.mealPrice, () => { p.hp = Math.min(p.maxHp || 100, p.hp + 50); }, `A proper meal — +50 HP. $${TUNE.mealPrice}.`);
+    else if (n === 2) buy(TUNE.snackPrice, () => { p.hp = Math.min(p.maxHp || 100, p.hp + 25); }, `A quick snack — +25 HP. $${TUNE.snackPrice}.`);
   }
 }
 export function updatePlayer(G, dt) {
@@ -238,22 +236,11 @@ export function updatePlayer(G, dt) {
   const shop = nearestShop(G);
   G.shopNear = shop;
   if (shop && take(input, 'b')) {
-    if (shop.kind === 'ammo' && p.money >= TUNE.ammoPrice) {
-      p.money -= TUNE.ammoPrice; p.ammo += TUNE.ammoPack; G.audio.cash();
-      G.banner = { text: `+${TUNE.ammoPack} ammo — $${TUNE.ammoPrice}. Stay safe out there.`, t: 2.5 };
-    } else if (shop.kind === 'ammo' && p.hp < (p.maxHp || 100) && p.money >= TUNE.medPrice) {
-      p.money -= TUNE.medPrice; p.hp = p.maxHp || 100; G.audio.cash();
-      G.banner = { text: `Patched up — $${TUNE.medPrice}. Good as new.`, t: 2.5 };
-    } else if (shop.kind === 'repair' && p.inCar && p.money >= TUNE.repairPrice) {
-      p.money -= TUNE.repairPrice; p.inCar.hp = p.inCar.maxHp; G.audio.cash();
-      G.banner = { text: `Car repaired — $${TUNE.repairPrice}.`, t: 2.5 };
-    } else if (shop.kind === 'atm') buyShopItem(G, 1);
-    else if (shop.kind === 'safehouse') buyShopItem(G, 1);
-    else if (shop.kind === 'clothes') buyShopItem(G, 1);
-    else if (shop.kind === 'diner') buyShopItem(G, 1);
-    else {
-      G.banner = { text: 'Not enough cash — go earn some first.', t: 2 };
-    }
+    if (shop.kind === 'ammo') {
+      if (p.money >= TUNE.ammoPrice) buyShopItem(G, 1);
+      else if (p.hp < (p.maxHp || 100) && p.money >= TUNE.medPrice) buyShopItem(G, 2);
+      else G.banner = { text: 'Not enough cash — go earn some first.', t: 2 };
+    } else buyShopItem(G, 1);
   }
   if (shop) {
     for (const n of [1, 2, 3, 4, 5, 6, 7]) if (take(input, String(n))) buyShopItem(G, n);

@@ -1,8 +1,8 @@
 import { TUNE, GUN_H } from './config.js';
 import { clamp, dist } from './random.js';
-import { parseColor } from './gl.js';
+import { pCol } from './gl.js';
 export function addParticles(G, x, y, z, n, color, speed, life, size) {
-  const c = parseColor(color);
+  const c = pCol(color);
   for (let i = 0; i < n; i += 1) {
     if (G.particles.length >= TUNE.maxParticles) return;
     const a = Math.random() * Math.PI * 2, s = speed * (0.3 + Math.random() * 0.7);

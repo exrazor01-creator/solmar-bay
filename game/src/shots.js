@@ -4,7 +4,8 @@ import { AVENUES, STREETS } from './config.js';
 import { startMission, dslSetup } from './missions.js';
 import { addWanted } from './police.js';
 import { spawnCar } from './traffic.js';
-import { spawnHeli, spawnBoat } from './vehicles.js';
+import { spawnHeli } from './vehicles.js';
+import { updateCamera } from './render3d.js';
 function driveAutopilot(G, waypoints, seconds, stepFn) {
   let wi = 0;
   const input = G.input;
@@ -50,90 +51,12 @@ function driveAutopilot(G, waypoints, seconds, stepFn) {
   }
   input.keys.clear();
 }
-function heliAutopilot(G, waypoints, seconds, stepFn) {
-  let wi = 0;
-  const input = G.input;
-  const steps = Math.floor(seconds / STEP);
-  for (let i = 0; i < steps; i += 1) {
-    const heli = G.player.inCar;
-    if (!heli || heli.kind !== 'heli') break;
-    while (wi < waypoints.length && dist(heli.x, heli.z, waypoints[wi].x, waypoints[wi].z) < 120) wi += 1;
-    const wp = waypoints[Math.min(wi, waypoints.length - 1)];
-    input.keys.clear();
-    if (heli.y < 70) input.keys.add(' ');
-    else input.keys.add('w');
-    const want = Math.atan2(wp.z - heli.z, wp.x - heli.x);
-    const diff = angleDiff(heli.angle, want);
-    if (diff < -0.05) input.keys.add('a');
-    else if (diff > 0.05) input.keys.add('d');
-    input.mouse.x = VIEW.w / 2; input.mouse.y = VIEW.h / 2;
-    stepFn(STEP);
-  }
-  input.keys.clear();
-}
-function boatAutopilot(G, waypoints, seconds, stepFn) {
-  let wi = 0;
-  const input = G.input;
-  const steps = Math.floor(seconds / STEP);
-  for (let i = 0; i < steps; i += 1) {
-    const boat = G.player.inCar;
-    if (!boat || boat.kind !== 'boat') break;
-    while (wi < waypoints.length && dist(boat.x, boat.z, waypoints[wi].x, waypoints[wi].z) < 120) wi += 1;
-    const wp = waypoints[Math.min(wi, waypoints.length - 1)];
-    input.keys.clear();
-    input.keys.add('w');
-    const want = Math.atan2(wp.z - boat.z, wp.x - boat.x);
-    const diff = angleDiff(boat.angle, want);
-    if (diff < -0.05) input.keys.add('a');
-    else if (diff > 0.05) input.keys.add('d');
-    input.mouse.x = VIEW.w / 2; input.mouse.y = VIEW.h / 2;
-    stepFn(STEP);
-  }
-  input.keys.clear();
-}
-function walkAutopilot(G, tx, tz, seconds, stepFn, shootAt) {
-  const input = G.input;
-  const steps = Math.floor(seconds / STEP);
-  for (let i = 0; i < steps; i += 1) {
-    const p = G.player;
-    const dx = tx - p.x, dz = tz - p.z;
-    input.keys.clear();
-    if (Math.abs(dx) > 30) input.keys.add(dx > 0 ? 'd' : 'a');
-    if (Math.abs(dz) > 30) input.keys.add(dz > 0 ? 's' : 'w');
-    if (G.renderer) G.renderer.setCamera(G.camera.eye, G.camera.target);
-    if (shootAt) {
-      const t = shootAt();
-      if (t && G.renderer) {
-        const scr = G.renderer.project(t.x, 22, t.z);
-        if (scr) { input.mouse.x = scr.x; input.mouse.y = scr.y; input.mouse.down = true; }
-        else input.mouse.down = false;
-      } else input.mouse.down = false;
-    } else if (G.renderer) {
-      const scr = G.renderer.project(tx, 22, tz);
-      if (scr) { input.mouse.x = scr.x; input.mouse.y = scr.y; }
-    }
-    stepFn(STEP);
-  }
-  input.keys.clear(); input.mouse.down = false;
-}
 function putInCar(G, x, z, angle, kind, color) {
   const car = spawnCar(G, x, z, kind || 'sedan', 'player');
   if (color) car.color = color;
   car.angle = angle; car.speed = 120;
   G.player.inCar = car; G.player.x = x; G.player.z = z;
   return car;
-}
-function putInHeli(G, x, z, angle, alt) {
-  const heli = spawnHeli(G, x, z, 'player');
-  heli.angle = angle; heli.y = alt || 0; heli.speed = 80;
-  G.player.inCar = heli; G.player.x = x; G.player.z = z;
-  return heli;
-}
-function putInBoat(G, x, z, angle) {
-  const boat = spawnBoat(G, x, z, 'player');
-  boat.angle = angle; boat.speed = 100;
-  G.player.inCar = boat; G.player.x = x; G.player.z = z;
-  return boat;
 }
 function skipDialog(G) {
   while (G.state === 'dialog') {
@@ -145,64 +68,64 @@ function skipDialog(G) {
 }
 export function stageShot(name, G, stepFn) {
   G.reset();
-  if (name === 'start') {
-    G.timeOfDay = 0.74;
+  if (name === 'title') {
+    G.timeOfDay = 0.72;
     for (let i = 0; i < 5 / STEP; i += 1) stepFn(STEP);
     return { screen: 'title' };
   }
   if (name === 'cover') {
-    G.timeOfDay = 0.3;
+    G.timeOfDay = 0.72;
     startMission(G, 13); skipDialog(G);
-    G.missions.objective = 'Steal the pink supercar — bring it to the garage';
     putInCar(G, 2200, 1680, Math.PI, 'supercar', '#e84393');
     addWanted(G, 8, '');
     G.banner = { text: 'HOT WHEELS — WANTED ★★★★ — Lose them at the garage', t: 99 };
-    const bus = spawnCar(G, 2200, 1500, 'bus', 'parked'); bus.angle = Math.PI / 2;
-    const suv = spawnCar(G, 2400, 1680, 'suv', 'parked'); suv.angle = 0;
-    driveAutopilot(G, [{ x: 1200, z: 1680 }, { x: 800, z: 1500 }], 3, stepFn);
-    if (!G.player.inCar) putInCar(G, G.player.x, G.player.z, Math.PI, 'supercar', '#e84393'); // re-seat if the guards wrecked the car
+    const bus = spawnCar(G, 2300, 1400, 'bus', 'parked'); bus.angle = Math.PI / 2;
+    const suv = spawnCar(G, 1900, 1580, 'suv', 'parked'); suv.angle = 0;
+    const taxi = spawnCar(G, 1600, 1500, 'taxi', 'traffic'); taxi.angle = Math.PI;
+    const sedan = spawnCar(G, 1000, 1500, 'sedan', 'traffic'); sedan.angle = 0;
+    driveAutopilot(G, [{ x: 1600, z: 1500 }, { x: 1200, z: 1500 }, { x: 800, z: 1500 }], 3, stepFn);
+    if (!G.player.inCar) putInCar(G, G.player.x, G.player.z, Math.PI, 'supercar', '#e84393');
+    G.missions.objective = 'Steal the pink supercar — bring it to the garage';
     const pc = G.player.inCar;
+    pc.hp = pc.maxHp;
     const cops = G.cars.filter(c => c.driver === 'police' && !c.dead);
     cops.forEach((cop, i) => {
-      cop.x = pc.x + 90 + i * 60;
-      cop.z = pc.z + (i === 0 ? 35 : -45);
-      cop.angle = Math.PI;
+      cop.x = pc.x - 220 - i * 110;
+      cop.z = pc.z + (i === 0 ? 25 : -35);
+      cop.angle = 0;
       cop.speed = 0;
     });
+    const heli = spawnHeli(G, pc.x - 200, pc.z + 120, 'police');
+    heli.y = 70; heli.alt = 70; heli.name = 'SHARK-7';
     return { screen: 'play' };
   }
-  if (name === 'mission') {
-    G.timeOfDay = 0.35;
-    startMission(G, 14); skipDialog(G);
-    G.missions.objective = 'Fly to Solmar International — stay above the roofs';
-    putInHeli(G, 2800, 300, 0, 70);
-    addWanted(G, 8, '');
-    G.banner = { text: 'SKY HOOK — WANTED ★★★★ — The chopper is up', t: 99 };
-    heliAutopilot(G, [{ x: 3010, z: 470 }, { x: 3100, z: 600 }], 4, stepFn);
-    if (!G.player.inCar || G.player.inCar.kind !== 'heli') putInHeli(G, 3010, 470, 0, 70); // re-seat if the heli went down
-    return { screen: 'play' };
+  if (name === 'market') {
+    G.timeOfDay = 0.72;
+    startMission(G, 20);
+    const m = G.missions;
+    (m.def.setup || dslSetup)(G);
+    const spots = [[1050, 1495], [1120, 1505], [1180, 1500], [980, 1505], [1150, 1495]];
+    G.peds.filter((pd) => pd.kind === 'guard').forEach((g, i) => {
+      const sp = spots[i % spots.length];
+      g.x = sp[0]; g.z = sp[1]; g.tx = sp[0]; g.tz = sp[1]; g.angle = 0;
+    });
+    G.player.x = 1250; G.player.z = 1500; G.player.angle = Math.PI;
+    G.player.weapon = 'rifle'; G.player.ownsRifle = true; G.player.rifleMag = 30; G.player.ammo = 48;
+    G.player.money = 18450;
+    for (let i = 0; i < 90; i += 1) updateCamera(G, STEP);
+    return { screen: 'dialog' };
   }
-  if (name === 'sunset') {
-    G.timeOfDay = 0.68;
-    startMission(G, 18); skipDialog(G);
-    G.player.char = 'luna'; G.player.maxHp = 85;
-    G.missions.objective = 'Get to Club Neon — make some noise';
-    G.player.x = 1100; G.player.z = 500;
-    G.banner = { text: 'CLUB NEON — Luna is on the town tonight', t: 99 };
-    walkAutopilot(G, 1360, 430, 3, stepFn, null);
-    return { screen: 'play' };
+  if (name === 'map') {
+    G.timeOfDay = 0.72;
+    G.stats.missionsDone = 7; G.stats.earned = 2400;
+    G.player.money = 2450;
+    startMission(G, 7); skipDialog(G);
+    G.state = 'map';
+    return { screen: 'map' };
   }
-  G.timeOfDay = 0.92;
-  startMission(G, 21); skipDialog(G);
-  G.missions.objective = 'Hold E at the vault to crack it (6s) — six stars!';
-  G.player.x = 1500; G.player.z = 700; G.player.ammo = 42; G.player.ownsSniper = true; G.player.sniperMag = 5; G.player.weapon = 'sniper';
-  addWanted(G, 12, '');
-  for (const [sx, sz] of [[1500, 700], [1660, 760]]) {
-    G.peds.push({ x: sx, z: sz, angle: 0, speed: 235, state: 'walk', kind: 'swat', hp: 150, tx: sx, tz: sz, waitT: 0, fleeT: 0, color: '#2d3436', seed: G.rng(), punchCd: 0 });
-  }
-  const bus = spawnCar(G, 1500, 1100, 'bus', 'parked'); bus.angle = Math.PI / 2;
-  const suv = spawnCar(G, 1700, 1200, 'suv', 'parked'); suv.angle = 0;
-  G.banner = { text: 'THE CROWN — WANTED ★★★★★★ — SWAT is on the ground', t: 99 };
-  walkAutopilot(G, 2000, 700, 2.5, stepFn, null);
+  G.timeOfDay = 0.72;
+  startMission(G, 0); skipDialog(G);
+  G.player.x = 860; G.player.z = 1180;
+  for (let i = 0; i < 3 / STEP; i += 1) stepFn(STEP);
   return { screen: 'play' };
 }

@@ -33,7 +33,7 @@ function startTaxiFare(G) {
   t.marker = { x: pickup.x, z: pickup.z, label: 'Fare pickup' };
   const ped = { x: pickup.x + 20, z: pickup.z, angle: 0, speed: 0, state: 'walk', kind: 'passenger', hp: 100, tx: pickup.x, tz: pickup.z, waitT: 99, fleeT: 0, color: '#f39c12', seed: G.rng() };
   G.peds.push(ped); t.passenger = ped;
-  G.banner = { text: 'Fare waiting — pick them up, then deliver them. $150 on the meter.', t: 3 };
+  G.banner = { text: 'Fare waiting — pick them up. $150 on the meter.', t: 3 };
 }
 function startRace(G) {
   const r = G.side.race;
@@ -48,7 +48,7 @@ function startDelivery(G) {
   while (dist(PLACES.depot.x, PLACES.depot.z, drop.x, drop.z) < 800 && guard < 20) { drop = randomRoadSpot(G); guard += 1; }
   d.active = true; d.timer = TUNE.deliveryTime; d.drop = drop;
   d.marker = { x: drop.x, z: drop.z, label: 'Delivery drop-off' };
-  G.banner = { text: `Parcel in hand — deliver it across town in ${TUNE.deliveryTime}s for $${TUNE.deliveryPay}.`, t: 3 };
+  G.banner = { text: `Parcel in hand — deliver it in ${TUNE.deliveryTime}s for $${TUNE.deliveryPay}.`, t: 3 };
 }
 export function updateSide(G, dt) {
   const s = G.side;
@@ -73,7 +73,7 @@ export function updateSide(G, dt) {
         const pas = t.passenger; if (pas) { const i = G.peds.indexOf(pas); if (i >= 0) G.peds.splice(i, 1); }
         t.marker = { x: t.drop.x, z: t.drop.z, label: 'Fare drop-off' };
         G.audio.pickup();
-        G.banner = { text: 'Fare aboard! Deliver them before the meter runs out.', t: 2.5 };
+        G.banner = { text: 'Fare aboard! Beat the meter.', t: 2.5 };
       }
     } else {
       t.timer -= dt;
@@ -84,7 +84,7 @@ export function updateSide(G, dt) {
         G.banner = { text: `Fare delivered! +$${TUNE.taxiFarePay}`, t: 3 };
       } else if (t.timer <= 0) {
         t.active = false; t.marker = null;
-        G.banner = { text: 'The fare gave up waiting. The meter is dead.', t: 3 };
+        G.banner = { text: 'The fare gave up. The meter is dead.', t: 3 };
       }
     }
   }
@@ -100,7 +100,7 @@ export function updateSide(G, dt) {
       G.banner = { text: `Delivery complete! +$${TUNE.deliveryPay}`, t: 3 };
     } else if (d.timer <= 0) {
       d.active = false; d.marker = null;
-      G.banner = { text: 'The parcel missed its window. The depot has more work when you are ready.', t: 3 };
+      G.banner = { text: 'The parcel missed its window. The depot has more work.', t: 3 };
     }
   }
   if (s.race.active) {
@@ -117,7 +117,7 @@ export function updateSide(G, dt) {
           G.audio.jingle(); G.audio.cash();
           G.banner = { text: `Race won in ${r.timer.toFixed(1)}s! +$${TUNE.racePay}`, t: 4 };
         } else {
-          G.banner = { text: `Finished in ${r.timer.toFixed(1)}s — over the ${TUNE.racePar}s par. No payout, but the streets respect the run.`, t: 4 };
+          G.banner = { text: `Finished in ${r.timer.toFixed(1)}s — over par. No payout.`, t: 4 };
         }
       } else {
         r.marker = { x: RACE_COURSE[r.cp].x, z: RACE_COURSE[r.cp].z, label: `Checkpoint ${r.cp + 1}/4` };
