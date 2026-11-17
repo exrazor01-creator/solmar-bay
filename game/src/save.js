@@ -5,9 +5,11 @@ const KEY = 'solmar-bay-save-v1';
 export function saveGame(G) {
   try {
     const s = {
-      money: G.player.money, ammo: G.player.ammo, hp: G.player.hp,
-      x: G.player.x, y: G.player.y, mission: G.missions ? G.missions.index : 0,
+      money: G.player.money, ammo: G.player.ammo, shells: G.player.shells || 0,
+      ownsShotgun: !!G.player.ownsShotgun, armor: G.player.armor || 0, nitro: G.player.nitro || 0,
+      hp: G.player.hp, x: G.player.x, z: G.player.z, mission: G.missions ? G.missions.index : 0,
       missionsDone: G.stats.missionsDone, earned: G.stats.earned, timeOfDay: G.timeOfDay,
+      packages: G.side ? G.side.packages.filter((p) => p.got).map((p) => p.id) : [],
     };
     localStorage.setItem(KEY, JSON.stringify(s));
     return true;

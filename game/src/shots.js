@@ -8,15 +8,16 @@ import { AVENUES, STREETS } from './config.js';
 import { startMission } from './missions.js';
 import { addWanted } from './police.js';
 import { spawnCar } from './traffic.js';
+import { spawnHeli, spawnBoat } from './vehicles.js';
 
 const SAMPLE = STEP;
 
-// Grid route from (x, y) to a marker: avenue, then street, then the marker itself.
-function routeTo(G, tx, ty) {
-  const x = G.player.x, y = G.player.y;
+// Grid route from (x, z) to a marker: avenue, then street, then the marker itself.
+function routeTo(G, tx, tz) {
+  const x = G.player.x, z = G.player.z;
   const av = AVENUES.reduce((a, b) => Math.abs(b - tx) < Math.abs(a - tx) ? b : a);
-  const st = STREETS.reduce((a, b) => Math.abs(b - ty) < Math.abs(a - ty) ? b : a);
-  return [{ x: av, y }, { x: av, y: st }, { x: tx, y: ty }];
+  const st = STREETS.reduce((a, b) => Math.abs(b - tz) < Math.abs(a - tz) ? b : a);
+  return [{ x: av, z }, { x: av, z: st }, { x: tx, z: tz }];
 }
 
 function driveAutopilot(G, waypoints, seconds, stepFn) {
@@ -27,39 +28,39 @@ function driveAutopilot(G, waypoints, seconds, stepFn) {
   for (let i = 0; i < steps; i += 1) {
     const car = G.player.inCar;
     if (!car) break;
-    while (wi < waypoints.length && dist(car.x, car.y, waypoints[wi].x, waypoints[wi].y) < 140) wi += 1;
+    while (wi < waypoints.length && dist(car.x, car.z, waypoints[wi].x, waypoints[wi].z) < 140) wi += 1;
     const wp = waypoints[Math.min(wi, waypoints.length - 1)];
     // Find a car blocking the road ahead.
     let blocker = null;
     for (const o of G.cars) {
       if (o === car || o.dead) continue;
-      const d = dist(car.x, car.y, o.x, o.y);
+      const d = dist(car.x, car.z, o.x, o.z);
       if (d < 110) {
-        const ahead = Math.cos(car.angle) * (o.x - car.x) + Math.sin(car.angle) * (o.y - car.y);
+        const ahead = Math.cos(car.angle) * (o.x - car.x) + Math.sin(car.angle) * (o.z - car.z);
         if (ahead > 0 && (!blocker || d < blocker.d)) blocker = { o, d };
       }
     }
-    let tx = wp.x, ty = wp.y;
+    let tx = wp.x, tz = wp.z;
     input.keys.clear();
     if (blocker && (blocker.o.driver === 'parked' || blocker.o.speed < 5)) {
       // Steer around a stopped car: aim ahead and a little to the left — just
       // enough to clear it, so the car stays on the road and rejoins quickly.
-      const fx = Math.cos(car.angle), fy = Math.sin(car.angle);
-      tx = car.x + fx * 120 - fy * 45; ty = car.y + fy * 120 + fx * 45;
+      const fx = Math.cos(car.angle), fz = Math.sin(car.angle);
+      tx = car.x + fx * 120 - fz * 45; tz = car.z + fz * 120 + fx * 45;
       input.keys.add('w');
     } else if (blocker) {
       // Coast behind a moving car.
     } else {
       input.keys.add('w');
     }
-    const want = Math.atan2(ty - car.y, tx - car.x);
+    const want = Math.atan2(tz - car.z, tx - car.x);
     const diff = angleDiff(car.angle, want);
     // Brake on approach to a sharp turn so the car arrives at the intersection
     // slow enough to turn tightly instead of swinging wide off the road.
     if (wi < waypoints.length - 1) {
       const nextWp = waypoints[wi + 1];
-      const turnAngle = Math.abs(angleDiff(Math.atan2(wp.y - car.y, wp.x - car.x), Math.atan2(nextWp.y - wp.y, nextWp.x - wp.x)));
-      const dWp = dist(car.x, car.y, wp.x, wp.y);
+      const turnAngle = Math.abs(angleDiff(Math.atan2(wp.z - car.z, wp.x - car.x), Math.atan2(nextWp.z - wp.z, nextWp.x - wp.x)));
+      const dWp = dist(car.x, car.z, wp.x, wp.z);
       if (turnAngle > 0.5 && dWp < 300 && Math.abs(car.speed) > 180) { input.keys.delete('w'); input.keys.add('s'); }
     }
     // Slow down for sharp turns so the car stays on the road instead of
@@ -68,43 +69,111 @@ function driveAutopilot(G, waypoints, seconds, stepFn) {
     else if (Math.abs(diff) > 0.5) input.keys.delete('w');
     if (diff < -0.05) input.keys.add('a');
     else if (diff > 0.05) input.keys.add('d');
-    input.mouse.x = VIEW.w / 2 + Math.cos(want) * 200;
-    input.mouse.y = VIEW.h / 2 + Math.sin(want) * 200;
-    if (i % 30 === 0) G.trace.push({ t: (i * STEP).toFixed(1), x: Math.round(car.x), y: Math.round(car.y), speed: Math.round(car.speed), blocked: blocker ? `${blocker.o.driver}/${blocker.o.kind}@${Math.round(blocker.d)}` : null });
+    input.mouse.x = VIEW.w / 2; input.mouse.y = VIEW.h / 2;
+    if (i % 30 === 0) G.trace.push({ t: (i * STEP).toFixed(1), x: Math.round(car.x), z: Math.round(car.z), speed: Math.round(car.speed), blocked: blocker ? `${blocker.o.driver}/${blocker.o.kind}@${Math.round(blocker.d)}` : null });
     stepFn(STEP);
   }
   input.keys.clear();
 }
 
-function walkAutopilot(G, tx, ty, seconds, stepFn, shootAt) {
+// Fly a helicopter toward waypoints: climb first, then thrust and steer.
+function heliAutopilot(G, waypoints, seconds, stepFn) {
+  let wi = 0;
+  const input = G.input;
+  const steps = Math.floor(seconds / STEP);
+  for (let i = 0; i < steps; i += 1) {
+    const heli = G.player.inCar;
+    if (!heli || heli.kind !== 'heli') break;
+    while (wi < waypoints.length && dist(heli.x, heli.z, waypoints[wi].x, waypoints[wi].z) < 120) wi += 1;
+    const wp = waypoints[Math.min(wi, waypoints.length - 1)];
+    input.keys.clear();
+    if (heli.y < 70) input.keys.add(' ');
+    else input.keys.add('w');
+    const want = Math.atan2(wp.z - heli.z, wp.x - heli.x);
+    const diff = angleDiff(heli.angle, want);
+    if (diff < -0.05) input.keys.add('a');
+    else if (diff > 0.05) input.keys.add('d');
+    input.mouse.x = VIEW.w / 2; input.mouse.y = VIEW.h / 2;
+    stepFn(STEP);
+  }
+  input.keys.clear();
+}
+
+// Sail a boat toward waypoints along the coast.
+function boatAutopilot(G, waypoints, seconds, stepFn) {
+  let wi = 0;
+  const input = G.input;
+  const steps = Math.floor(seconds / STEP);
+  for (let i = 0; i < steps; i += 1) {
+    const boat = G.player.inCar;
+    if (!boat || boat.kind !== 'boat') break;
+    while (wi < waypoints.length && dist(boat.x, boat.z, waypoints[wi].x, waypoints[wi].z) < 120) wi += 1;
+    const wp = waypoints[Math.min(wi, waypoints.length - 1)];
+    input.keys.clear();
+    input.keys.add('w');
+    const want = Math.atan2(wp.z - boat.z, wp.x - boat.x);
+    const diff = angleDiff(boat.angle, want);
+    if (diff < -0.05) input.keys.add('a');
+    else if (diff > 0.05) input.keys.add('d');
+    input.mouse.x = VIEW.w / 2; input.mouse.y = VIEW.h / 2;
+    stepFn(STEP);
+  }
+  input.keys.clear();
+}
+
+function walkAutopilot(G, tx, tz, seconds, stepFn, shootAt) {
   const input = G.input;
   const steps = Math.floor(seconds / STEP);
   for (let i = 0; i < steps; i += 1) {
     const p = G.player;
-    const dx = tx - p.x, dy = ty - p.y;
+    const dx = tx - p.x, dz = tz - p.z;
     input.keys.clear();
     if (Math.abs(dx) > 30) input.keys.add(dx > 0 ? 'd' : 'a');
-    if (Math.abs(dy) > 30) input.keys.add(dy > 0 ? 's' : 'w');
+    if (Math.abs(dz) > 30) input.keys.add(dz > 0 ? 's' : 'w');
+    // Refresh the view-projection before projecting: during staged
+    // (synchronous) play no render has run yet, so vp is undefined until
+    // setCamera is called.
+    if (G.renderer) G.renderer.setCamera(G.camera.eye, G.camera.target);
     if (shootAt) {
       const t = shootAt();
-      if (t) {
-        input.mouse.x = VIEW.w / 2 + (t.x - p.x) * 0.5;
-        input.mouse.y = VIEW.h / 2 + (t.y - p.y) * 0.5;
-        input.mouse.down = true;
+      if (t && G.renderer) {
+        const scr = G.renderer.project(t.x, 22, t.z);
+        if (scr) { input.mouse.x = scr.x; input.mouse.y = scr.y; input.mouse.down = true; }
+        else input.mouse.down = false;
       } else input.mouse.down = false;
+    } else if (G.renderer) {
+      // Aim where we walk so the player faces the direction of travel: the
+      // chase camera then stays behind them on the road instead of swinging
+      // into a city block and blanking the frame behind a rooftop.
+      const scr = G.renderer.project(tx, 22, tz);
+      if (scr) { input.mouse.x = scr.x; input.mouse.y = scr.y; }
     }
     stepFn(STEP);
   }
   input.keys.clear(); input.mouse.down = false;
 }
 
-// Put the player in a car at (x, y) heading `angle`.
-function putInCar(G, x, y, angle, kind, color) {
-  const car = spawnCar(G, x, y, kind || 'sedan', 'player');
+// Put the player in a car at (x, z) heading `angle`.
+function putInCar(G, x, z, angle, kind, color) {
+  const car = spawnCar(G, x, z, kind || 'sedan', 'player');
   if (color) car.color = color;
   car.angle = angle; car.speed = 120;
-  G.player.inCar = car; G.player.x = x; G.player.y = y;
+  G.player.inCar = car; G.player.x = x; G.player.z = z;
   return car;
+}
+
+function putInHeli(G, x, z, angle, alt) {
+  const heli = spawnHeli(G, x, z, 'player');
+  heli.angle = angle; heli.y = alt || 0; heli.speed = 80;
+  G.player.inCar = heli; G.player.x = x; G.player.z = z;
+  return heli;
+}
+
+function putInBoat(G, x, z, angle) {
+  const boat = spawnBoat(G, x, z, 'player');
+  boat.angle = angle; boat.speed = 100;
+  G.player.inCar = boat; G.player.x = x; G.player.z = z;
+  return boat;
 }
 
 function skipDialog(G) {
@@ -119,11 +188,8 @@ function skipDialog(G) {
 
 export function stageShot(name, G, stepFn) {
   G.reset();
-  const R = G.rng;
   if (name === 'start') {
     G.timeOfDay = 0.74; // golden hour over downtown
-    G.camera.x = clamp(1200 - VIEW.w / 2, 0, 3200 - VIEW.w);
-    G.camera.y = clamp(1100 - VIEW.h / 2, 0, 2400 - VIEW.h);
     for (let i = 0; i < 5 / STEP; i += 1) stepFn(STEP);
     return { screen: 'title' };
   }
@@ -139,57 +205,56 @@ export function stageShot(name, G, stepFn) {
     G.banner = { text: 'WANTED ★★★ — Lose them at the hideout', t: 99 };
     // Straight run west along the avenue — the waypoint sits off the west edge,
     // so the car never arrives and never turns around; it stays on the road.
-    driveAutopilot(G, [{ x: -100, y: 1100 }], 2.5, stepFn);
+    driveAutopilot(G, [{ x: -100, z: 1100 }], 2.5, stepFn);
     // Line the pursuit up right behind the player's car so the chase reads in-frame.
+    // Both cars sit ahead of the chase camera (camera ~235 behind the player).
     const pc = G.player.inCar;
     const cops = G.cars.filter(c => c.driver === 'police' && !c.dead);
     cops.forEach((cop, i) => {
-      cop.x = pc.x + 150 + i * 90;
-      cop.y = pc.y + (i === 0 ? 35 : -45);
+      cop.x = pc.x + 90 + i * 60;
+      cop.z = pc.z + (i === 0 ? 35 : -45);
       cop.angle = Math.PI;
       cop.speed = 0;
     });
     return { screen: 'play' };
   }
   if (name === 'mission') {
-    // Mission 3, stage 1: package in hand, on foot by the bank, a guard firing,
-    // a pedestrian fleeing, objective and ammo on the HUD.
+    // Mission 10, stage 1: the helicopter over Solmar Tower, the police chopper
+    // closing in, the whole downtown skyline below.
     G.timeOfDay = 0.35;
-    startMission(G, 2); skipDialog(G);
-    G.missions.stage = 1; G.missions.timer = 82;
-    G.missions.marker = { x: 2800, y: 1900, label: 'East Pier' };
-    G.missions.objective = 'Package in hand! Deliver it to the east pier';
-    G.player.x = 1560; G.player.y = 780; G.player.ammo = 42;
-    const guard = { x: 1680, y: 700, angle: 0, speed: 0, state: 'walk', kind: 'guard', hp: 100, tx: 1680, ty: 700, waitT: 99, fleeT: 0, shirt: '#2c3e50', shootCd: 0.5 };
-    G.peds.push(guard);
-    const ped = { x: 1500, y: 900, angle: 0, speed: 60, state: 'flee', kind: 'walker', hp: 100, tx: 1400, ty: 1000, waitT: 0, fleeT: 5, fx: 1400, fy: 1000, shirt: '#e74c3c' };
-    G.peds.push(ped);
-    addWanted(G, 2, '');
-    walkAutopilot(G, 1900, 900, 5, stepFn, () => (guard.state === 'dead' ? null : guard));
-    // Refresh the banner: the shootout raised the wanted level since it was set.
-    G.banner = { text: 'WANTED ' + '★'.repeat(G.player.wanted) + '☆'.repeat(5 - G.player.wanted) + ' — Lose the cops', t: 99 };
+    startMission(G, 9); skipDialog(G);
+    G.missions.stage = 1;
+    G.missions.objective = 'Fly to Solmar Tower — hover over the roof to grab the package';
+    putInHeli(G, 1600, 1100, 0, 70);
+    addWanted(G, 8, '');
+    G.banner = { text: 'WANTED ★★★★ — The chopper is up', t: 99 };
+    heliAutopilot(G, [{ x: 1800, z: 1300 }, { x: 2200, z: 1300 }], 4, stepFn);
     return { screen: 'play' };
   }
   if (name === 'sunset') {
-    // Golden hour on the beach road: taxi cruise, traffic, pedestrians, palms, ocean.
-    G.timeOfDay = 0.74;
-    startMission(G, 1); skipDialog(G);
-    putInCar(G, 800, 1900, 0, 'taxi', '#f7c948');
-    G.missions.marker = { x: 2400, y: 1900, label: 'Hotel Solmar' };
-    G.missions.objective = 'Cruise the beach road — Solmar Bay at golden hour';
-    driveAutopilot(G, [{ x: 2400, y: 1900 }], 4.5, stepFn);
+    // Mission 8: the getaway by boat at dusk — the marina, the harbour, the
+    // lighthouse and the open sea, with the sun low over the water.
+    G.timeOfDay = 0.68;
+    startMission(G, 7); skipDialog(G);
+    G.missions.stage = 1;
+    G.missions.objective = 'Sail east to the far pier — stay in the water';
+    putInBoat(G, 400, 2290, 0);
+    G.banner = { text: 'THE GETAWAY — Sail east along the coast', t: 99 };
+    boatAutopilot(G, [{ x: 1600, z: 2330 }, { x: 2600, z: 2330 }], 4.5, stepFn);
     return { screen: 'play' };
   }
-  // night — mission 7, stage 2: the big score done, four stars, night chase with headlights.
-  G.timeOfDay = 0.93;
-  startMission(G, 6); skipDialog(G);
-  G.missions.stage = 2; G.missions.progress = 1;
-  G.missions.marker = { x: 400, y: 1900, label: 'Hideout' };
-  G.missions.objective = 'Cash grabbed! Escape to the hideout';
-  G.player.money = 3250;
-  putInCar(G, 2000, 1500, Math.PI, 'sport', '#8e44ad');
-  addWanted(G, 8, '');
-  G.banner = { text: 'BANK ROBBERY ★★★★ — Every cop in Solmar Bay is coming', t: 99 };
-  driveAutopilot(G, routeTo(G, 400, 1900), 5, stepFn);
+  // night — the city by day: downtown, the tower, traffic of every kind, a package
+  // on the sidewalk, the HUD and minimap alive.
+  G.timeOfDay = 0.3;
+  G.player.x = 1560; G.player.z = 780; G.player.ammo = 42;
+  const bike = spawnCar(G, 1500, 1100, 'bike', 'parked'); bike.angle = Math.PI / 2;
+  const truck = spawnCar(G, 1700, 1200, 'truck', 'parked'); truck.angle = 0;
+  const sport = spawnCar(G, 1600, 1000, 'sport', 'parked'); sport.angle = Math.PI;
+  G.banner = { text: 'Downtown Solmar Bay — 12 missions, helicopters, boats, races', t: 99 };
+  // Walk the roads, not through the blocks: south down avenue 1600, then east
+  // along street 1100 — a straight line would wedge the player (and the camera)
+  // against a building and blank the frame.
+  walkAutopilot(G, 1600, 1100, 2.5, stepFn, null);
+  walkAutopilot(G, 1800, 1100, 2, stepFn, null);
   return { screen: 'play' };
 }
