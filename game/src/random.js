@@ -14,6 +14,4 @@ export function chance(rng, p) { return rng() < p; }
 export function clamp(v, lo, hi) { return v < lo ? lo : v > hi ? hi : v; }
 export function lerp(a, b, t) { return a + (b - a) * t; }
 export function dist(x1, z1, x2, z2) { const dx = x2 - x1, dz = z2 - z1; return Math.sqrt(dx * dx + dz * dz); }
-export function dist3(x1, y1, z1, x2, y2, z2) { return Math.hypot(x2 - x1, y2 - y1, z2 - z1); }
-export function angleTo(x1, z1, x2, z2) { return Math.atan2(z2 - z1, x2 - x1); }
 export function angleDiff(a, b) { let d = b - a; while (d > Math.PI) d -= Math.PI * 2; while (d < -Math.PI) d += Math.PI * 2; return d; }

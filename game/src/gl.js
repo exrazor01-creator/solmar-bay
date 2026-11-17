@@ -187,6 +187,28 @@ export function mkRenderer(canvas) {
         this.idx.push(base, base + 1, base + 2); this.tris += 1;
       }
     },
+    sph(x, y, z, rx, ry, rz, c, n) {
+      const s = n || 6, q = pCol(c);
+      for (let i = 0; i < s; i += 1) {
+        const a = i / s * Math.PI, b = (i + 1) / s * Math.PI;
+        for (let j = 0; j < s; j += 1) {
+          const t = j / s * 6.283, u = (j + 1) / s * 6.283;
+          const P = (A, T) => [x + Math.sin(A) * Math.cos(T) * rx, y + Math.cos(A) * ry, z + Math.sin(A) * Math.sin(T) * rz];
+          const m = (a + b) / 2, w = (t + u) / 2;
+          this.quad(P(a, t), P(a, u), P(b, u), P(b, t), q, [Math.sin(m) * Math.cos(w), Math.cos(m), Math.sin(m) * Math.sin(w)]);
+        }
+      }
+    },
+    disc(x, y, z, nx, nz, r, c, n) {
+      const s = n || 8, q = pCol(c), px = -nz, pz = nx;
+      for (let i = 0; i < s; i += 1) {
+        const a = i / s * 6.283, b = (i + 1) / s * 6.283;
+        const v = (t) => [x + px * Math.cos(t) * r, y + Math.sin(t) * r, z + pz * Math.cos(t) * r];
+        const o = this.vc;
+        this.vert([x, y, z], q, [nx, 0, nz]); this.vert(v(a), q, [nx, 0, nz]); this.vert(v(b), q, [nx, 0, nz]);
+        this.idx.push(o, o + 1, o + 2); this.tris += 1;
+      }
+    },
     rayGround(mx, my) {
       const nx = (mx / this.w) * 2 - 1, ny = 1 - (my / this.h) * 2;
       const dx = this.fwd[0] + this.right[0] * nx * this.tanHalf * this.aspect + this.up[0] * ny * this.tanHalf;

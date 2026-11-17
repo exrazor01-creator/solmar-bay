@@ -11,8 +11,6 @@ export function districtAt(x, z) {
   if (x < 1200) return 'Old Town';
   return 'Midtown';
 }
-export function isWater(x, z) { return z >= WATER_Z; }
-export function isSand(x, z) { return z >= BEACH_Z && z < WATER_Z; }
 const AIRPORT = { x0: 2830, x1: 3200, z0: 130, z1: 760 };
 function inAirport(x, z, w, d) {
   return x < AIRPORT.x1 && x + w > AIRPORT.x0 && z < AIRPORT.z1 && z + d > AIRPORT.z0;
@@ -108,12 +106,6 @@ export function onRoad(x, z) {
   for (const a of AVENUES) if (Math.abs(x - a) <= ROAD_W / 2) return true;
   for (const s of STREETS) if (Math.abs(z - s) <= ROAD_W / 2) return true;
   return false;
-}
-export function roadLane(x, z) {
-  let best = null;
-  for (const a of AVENUES) { const d = Math.abs(x - a); if (!best || d < best.d) best = { d, axis: 'x', c: a, side: x >= a ? 1 : -1 }; }
-  for (const s of STREETS) { const d = Math.abs(z - s); if (!best || d < best.d) best = { d, axis: 'z', c: s, side: z >= s ? 1 : -1 }; }
-  return best;
 }
 export function nearestIntersection(x, z) {
   let bx = AVENUES[0], bz = STREETS[0], bd = Infinity;

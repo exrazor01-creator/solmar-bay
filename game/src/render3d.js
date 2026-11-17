@@ -49,23 +49,23 @@ export function updateCamera(G, dt) {
 }
 function drawCar(R, car, time) {
   const x = car.x, z = car.z, y = car.y || 0, a = car.angle;
+  const fx = Math.cos(a), fz = Math.sin(a), rx = -fz, rz = fx;
   if (car.kind !== 'boat') {
     const sh = car.kind === 'heli' ? clamp(1 - car.y / 260, 0.25, 1) : 1;
     R.flat(x - 26, z - 20, 52, 40, 0.2, [0, 0, 0, 0.28 * sh]);
   }
-  if (car.dead) {
-    R.box(x, y + 7, z, 52, 12, 26, '#2f3542', a);
-    return;
-  }
+  if (car.dead) { R.box(x, y + 7, z, 52, 12, 26, '#2f3542', a); return; }
   if (car.kind === 'heli') {
     const alt = car.y;
-    R.box(x, alt + 12, z, 46, 16, 24, car.color, a);
-    R.box(x - Math.cos(a) * 34, alt + 12, z - Math.sin(a) * 34, 26, 8, 8, car.color, a);
-    R.box(x + Math.cos(a) * 18, alt + 20, z + Math.sin(a) * 18, 14, 8, 18, '#9fd8e8', a);
+    R.box(x, alt + 12, z, 46, 14, 24, car.color, a);
+    R.box(x - fx * 34, alt + 12, z - fz * 34, 26, 8, 8, car.color, a);
+    R.sph(x + fx * 16, alt + 18, z + fz * 16, 9, 7, 9, '#9fd8e8', 6);
     R.box(x, alt + 22, z, 2, 6, 2, '#2f3542', a);
     const rot = car.rotor || 0;
     R.box(x, alt + 25, z, 64, 2, 4, '#2f3542', rot);
     R.box(x, alt + 25, z, 4, 2, 64, '#2f3542', rot);
+    R.flat(x - 32, z - 32, 64, 64, alt + 25, [0.75, 0.75, 0.75, 0.16]);
+    for (const sg of [-1, 1]) R.box(x + rx * 12 * sg, alt + 2, z + rz * 12 * sg, 30, 2, 3, '#2f3542', a);
     if (car.driver === 'police') {
       const flash = Math.floor(time * 6) % 2 === 0 ? '#ff4757' : '#3742fa';
       R.box(x, alt + 21, z, 10, 4, 10, flash, a);
@@ -75,64 +75,84 @@ function drawCar(R, car, time) {
   if (car.kind === 'boat') {
     R.box(x, y + 7, z, 54, 12, 26, '#ecf0f1', a);
     R.box(x, y + 16, z, 24, 10, 18, '#2e7f9e', a);
-    R.box(x - Math.cos(a) * 22, y + 12, z - Math.sin(a) * 22, 10, 8, 20, '#c0392b', a);
+    R.sph(x + fx * 6, y + 24, z + fz * 6, 10, 6, 8, '#9fd8e8', 6);
+    R.box(x - fx * 22, y + 12, z - fz * 22, 10, 8, 20, '#c0392b', a);
+    R.box(x - fx * 30, y + 6, z - fz * 30, 6, 10, 6, '#2f3542', a);
     return;
   }
-  const len = car.kind === 'truck' ? 74 : car.kind === 'bus' ? 72 : car.kind === 'bike' ? 42 : car.kind === 'supercar' ? 56 : 52;
-  const wid = car.kind === 'bike' ? 12 : car.kind === 'truck' ? 28 : car.kind === 'bus' ? 30 : 26;
-  const h = car.kind === 'truck' ? 18 : car.kind === 'van' || car.kind === 'bus' ? 22 : car.kind === 'supercar' ? 10 : 13;
+  const k = car.kind;
+  const len = k === 'truck' ? 74 : k === 'bus' ? 72 : k === 'bike' ? 42 : k === 'supercar' ? 56 : 52;
+  const wid = k === 'bike' ? 12 : k === 'truck' ? 28 : k === 'bus' ? 30 : 26;
+  const h = k === 'truck' ? 18 : k === 'van' || k === 'bus' ? 22 : k === 'supercar' ? 10 : 13;
+  if (k === 'bike') {
+    R.box(x, y + 10, z, 30, 8, 10, car.color, a);
+    R.cyl(x, y + 14, z, 5, 12, '#2f3542', 6);
+    R.sph(x, y + 30, z, 5, 5, 5, SKIN[0], 6);
+    for (const sg of [-1, 1]) R.disc(x + fx * 18 * sg, y + 6, z + fz * 18 * sg, rx, rz, 6, '#1a1a1a', 8);
+    return;
+  }
   R.box(x, y + h / 2 + 3, z, len, h, wid, car.color, a);
-  if (car.kind === 'bike') {
-    R.box(x, y + 20, z, 16, 12, 10, '#2f3542', a);
-    R.box(x + Math.cos(a) * 18, y + 5, z + Math.sin(a) * 18, 8, 10, 4, '#1a1a1a', a);
-    R.box(x - Math.cos(a) * 18, y + 5, z - Math.sin(a) * 18, 8, 10, 4, '#1a1a1a', a);
-    return;
-  }
-  R.box(x - Math.cos(a) * 4, y + h + 7, z - Math.sin(a) * 4, len * 0.45, 10, wid * 0.78, '#2c3e50', a);
-  const fx = Math.cos(a), fz = Math.sin(a), rx = -fz, rz = fx;
+  R.box(x + fx * len * 0.3, y + h * 0.5 + 2, z + fz * len * 0.3, len * 0.32, h * 0.7, wid * 0.92, car.color, a);
+  R.box(x - fx * 4, y + h + 6, z - fz * 4, len * 0.44, 9, wid * 0.74, '#1e2a38', a);
+  R.sph(x - fx * 4, y + h + 11, z - fz * 4, len * 0.2, 5, wid * 0.36, '#9fd8e8', 6);
   for (const s of [-1, 1]) for (const t of [-1, 1]) {
-    R.box(x + fx * len * 0.32 * s + rx * wid * 0.5 * t, y + 5, z + fz * len * 0.32 * s + rz * wid * 0.5 * t, 10, 10, 6, '#1a1a1a', a);
+    const wx = x + fx * len * 0.32 * s + rx * wid * 0.5 * t, wz = z + fz * len * 0.32 * s + rz * wid * 0.5 * t;
+    R.disc(wx, y + 6, wz, rx, rz, 6, '#1a1a1a', 8);
+    R.disc(wx + rx * t, y + 6, wz + rz * t, rx, rz, 2.5, '#b0b8c0', 6);
   }
-  if (car.kind === 'taxi') R.box(x, y + h + 15, z, 14, 5, 10, '#f7c948', a);
-  if (car.kind === 'police') {
+  for (const s of [-1, 1]) {
+    R.box(x + fx * len * 0.5 + rx * wid * 0.3 * s, y + h * 0.55, z + fz * len * 0.5 + rz * wid * 0.3 * s, 3, 4, 5, '#fff7cc', a);
+    R.box(x - fx * len * 0.5 + rx * wid * 0.3 * s, y + h * 0.55, z - fz * len * 0.5 + rz * wid * 0.3 * s, 3, 4, 5, '#e74c3c', a);
+    R.box(x + fx * len * 0.1 + rx * wid * 0.52 * s, y + h + 2, z + fz * len * 0.1 + rz * wid * 0.52 * s, 4, 3, 3, '#2f3542', a);
+  }
+  R.box(x + fx * (len / 2 + 1), y + 4, z + fz * (len / 2 + 1), 2, 5, wid * 0.7, '#2f3542', a);
+  R.box(x - fx * (len / 2 + 1), y + 4, z - fz * (len / 2 + 1), 2, 5, wid * 0.7, '#2f3542', a);
+  if (k === 'taxi') R.box(x, y + h + 15, z, 14, 5, 10, '#f7c948', a);
+  if (k === 'police') {
     const flash = Math.floor(time * 6) % 2 === 0 ? '#ff4757' : '#3742fa';
-    R.box(x - Math.cos(a) * 4, y + h + 14, z - Math.sin(a) * 4, 16, 4, 8, flash, a);
+    R.box(x - fx * 4, y + h + 14, z - fz * 4, 16, 4, 8, flash, a);
     R.box(x, y + h / 2 + 3, z, len * 0.9, 3, wid + 1, '#ecf0f1', a);
   }
-  if (car.kind === 'truck') R.box(x - Math.cos(a) * 18, y + 22, z - Math.sin(a) * 18, 30, 22, 24, '#b0a08a', a);
-  if (car.kind === 'bus') {
+  if (k === 'truck') R.box(x - fx * 18, y + 22, z - fz * 18, 30, 22, 24, '#b0a08a', a);
+  if (k === 'bus') {
     R.box(x, y + h + 6, z, len * 0.8, 10, wid * 0.8, '#9fd8e8', a);
-    R.box(x + Math.cos(a) * 30, y + 8, z + Math.sin(a) * 30, 6, 8, 12, '#f1c40f', a);
+    R.box(x + fx * 30, y + 8, z + fz * 30, 6, 8, 12, '#f1c40f', a);
   }
-  if (car.kind === 'supercar') R.box(x - Math.cos(a) * 26, y + h + 4, z - Math.sin(a) * 26, 10, 3, 24, '#2f3542', a);
-  if (car.kind === 'suv') R.box(x - Math.cos(a) * 10, y + h + 6, z - Math.sin(a) * 10, 20, 8, 20, '#2c3e50', a);
+  if (k === 'supercar') R.box(x - fx * 26, y + h + 4, z - fz * 26, 10, 3, 24, '#2f3542', a);
+  if (k === 'suv') R.box(x - fx * 10, y + h + 6, z - fz * 10, 20, 8, 20, '#2c3e50', a);
+}
+function drawFig(R, x, z, a, o, time) {
+  const s = o.h || 1, sw = o.moving ? Math.sin(time * 9 + (o.ph || 0)) * 5 * s : 0;
+  const fx = Math.cos(a), fz = Math.sin(a), rx = -fz, rz = fx;
+  R.flat(x - 10 * s, z - 8 * s, 20 * s, 16 * s, 0.2, [0, 0, 0, 0.28]);
+  for (const sg of [-1, 1]) {
+    R.cyl(x + rx * 4 * s * sg + fx * sw * sg, 0, z + rz * 4 * s * sg + fz * sw * sg, 2.6 * s, 13 * s, o.pants || '#2d3436', 5);
+    R.cyl(x + rx * 8 * s * sg - fx * sw * sg, 13 * s, z + rz * 8 * s * sg - fz * sw * sg, 2.2 * s, 12 * s, o.shirt, 5);
+  }
+  R.cyl(x, 12 * s, z, 6.5 * s, 15 * s, o.shirt, 7);
+  if (o.vest) R.cyl(x, 16 * s, z, 7 * s, 10 * s, o.vest, 7);
+  R.sph(x, 32 * s, z, 6 * s, 6 * s, 6 * s, o.skin, 6);
+  if (o.hat) R.cyl(x, 36 * s, z, 6.5 * s, 3 * s, o.hat, 7);
+  else R.sph(x, 35 * s, z, 5.5 * s, 3.5 * s, 5.5 * s, o.hair || '#2d3436', 6);
+  if (o.gun) R.box(x + fx * 13, 20 * s, z + fz * 13, 14, 3, 3, '#1a1a1a', a);
 }
 function drawPed(R, ped, time) {
-  const x = ped.x, z = ped.z;
-  R.flat(x - 10, z - 8, 20, 16, 0.2, [0, 0, 0, 0.25]);
-  const walk = Math.sin(time * 8 + ped.seed * 10) * 3;
-  R.box(x, 13 + Math.abs(walk) * 0.4, z, 14, 26, 12, ped.color || '#7f8c8d', ped.angle);
-  R.box(x, 32, z, 11, 11, 11, SKIN[Math.floor(ped.seed * 4) % 4], ped.angle);
-  if (ped.kind === 'cop') R.box(x, 39, z, 12, 4, 12, '#1c4ed8', ped.angle);
-  if (ped.kind === 'swat') R.box(x, 39, z, 12, 5, 12, '#2d3436', ped.angle);
-  if (ped.kind === 'guard') R.box(x + Math.cos(ped.angle) * 10, 20, z + Math.sin(ped.angle) * 10, 14, 4, 4, '#1a1a1a', ped.angle);
-  if (ped.kind === 'passenger') {
-    R.box(x, 52 + Math.sin(time * 3) * 3, z, 10, 10, 10, '#f7c948', time * 2);
-  }
+  const skin = SKIN[Math.floor(ped.seed * 4) % 4];
+  const base = { skin, h: 1, ph: ped.seed * 10, moving: ped.state === 'walk' || ped.state === 'flee' };
+  if (ped.kind === 'cop') drawFig(R, ped.x, ped.z, ped.angle, { ...base, shirt: '#1c4ed8', pants: '#1c4ed8', hat: '#1c4ed8', vest: '#0f2a6b', gun: true }, time);
+  else if (ped.kind === 'swat') drawFig(R, ped.x, ped.z, ped.angle, { ...base, shirt: '#2d3436', pants: '#2d3436', hat: '#2d3436', vest: '#1a1a1a', gun: true }, time);
+  else if (ped.kind === 'guard') drawFig(R, ped.x, ped.z, ped.angle, { ...base, shirt: '#2c3e50', pants: '#2c3e50', hat: '#1a1a1a', gun: true }, time);
+  else drawFig(R, ped.x, ped.z, ped.angle, { ...base, shirt: ped.color || '#7f8c8d', pants: '#2d3436', hair: ['#2d3436', '#8a6b46', '#e67e22', '#7f8c8d'][Math.floor(ped.seed * 4) % 4] }, time);
+  if (ped.kind === 'passenger') R.box(ped.x, 52 + Math.sin(time * 3) * 3, ped.z, 10, 10, 10, '#f7c948', time * 2);
 }
 function drawPlayer(R, G, time) {
   const p = G.player;
   if (p.inCar) return;
-  const x = p.x, z = p.z;
-  R.flat(x - 11, z - 9, 22, 18, 0.2, [0, 0, 0, 0.3]);
-  const bob = Math.abs(Math.sin(time * 9)) * (p.moving ? 2 : 0);
   const ch = CHARS[p.char || 'vic'], outfit = OUTFITS[p.outfit || 0] || OUTFITS[0];
-  const shirt = outfit.shirt || ch.shirt, cap = outfit.cap || ch.cap, skin = ch.skin;
-  R.box(x, 13 + bob, z, 16, 24, 14, shirt, p.angle);
-  R.box(x, 31 + bob, z, 12, 12, 12, skin, p.angle);
-  R.box(x, 37 + bob, z, 13, 4, 13, cap, p.angle);
-  const gx = x + Math.cos(p.angle) * 12, gz = z + Math.sin(p.angle) * 12;
-  R.box(gx, 20 + bob, gz, 12, 4, 4, '#1a1a1a', p.angle);
+  drawFig(R, p.x, p.z, p.angle, {
+    shirt: outfit.shirt || ch.shirt, pants: '#2d3436', skin: ch.skin, hat: outfit.cap || ch.cap,
+    h: p.char === 'luna' ? 0.92 : 1, moving: p.moving, gun: true,
+  }, time);
 }
 function drawStall(R, s) {
   const fx = Math.cos(s.ry), fz = Math.sin(s.ry);
@@ -146,6 +166,27 @@ function drawStall(R, s) {
   R.flat(s.x, s.z - 15, 24, 30, 32, '#ecf0f1');
   R.box(s.x - 30, 6, s.z + 18, 12, 10, 12, '#a67c52', s.ry);
   R.box(s.x + 30, 6, s.z - 18, 12, 10, 12, '#8a6b46', s.ry);
+}
+function winGrid(R, b, night) {
+  const cols = Math.max(2, Math.min(6, Math.floor(b.w / 34)));
+  const cw = (b.w - 16) / cols;
+  const cols2 = Math.max(2, Math.min(6, Math.floor(b.d / 34)));
+  const cw2 = (b.d - 16) / cols2;
+  for (let f = 0; f < b.floors; f += 1) {
+    const y0 = 8 + f * FLOOR_H, y1 = y0 + 16;
+    for (let c = 0; c < cols; c += 1) {
+      const lit = ((b.seed * 7 + f * 13 + c * 5) % 10) < (night ? 6 : 2);
+      const col = lit ? (night ? '#ffd97a' : '#9fd8e8') : '#2c3e50';
+      const x0 = b.x + 8 + c * cw, x1 = x0 + cw * 0.55;
+      R.quad([x0, y0, b.z + b.d + 0.6], [x1, y0, b.z + b.d + 0.6], [x1, y1, b.z + b.d + 0.6], [x0, y1, b.z + b.d + 0.6], col, [0, 0, 1]);
+    }
+    for (let c = 0; c < cols2; c += 1) {
+      const lit = ((b.seed * 11 + f * 7 + c * 3) % 10) < (night ? 6 : 2);
+      const col = lit ? (night ? '#ffd97a' : '#9fd8e8') : '#2c3e50';
+      const z0 = b.z + 8 + c * cw2, z1 = z0 + cw2 * 0.55;
+      R.quad([b.x + b.w + 0.6, y0, z0], [b.x + b.w + 0.6, y0, z1], [b.x + b.w + 0.6, y1, z1], [b.x + b.w + 0.6, y1, z0], col, [1, 0, 0]);
+    }
+  }
 }
 export function render3D(G, R) {
   const time = G.time, sky = skyAt(G.timeOfDay);
@@ -177,15 +218,29 @@ export function render3D(G, R) {
   }
   for (const a of AVENUES) for (let z = 100; z < BEACH_Z - 60; z += 200) R.flat(a - 3, z, 6, 60, 0.14, PALETTE.roadLine);
   for (const s of STREETS) for (let x = 100; x < WORLD.w - 60; x += 200) R.flat(x, s - 3, 60, 6, 0.14, PALETTE.roadLine);
+  for (const a of AVENUES) for (const s of STREETS) {
+    for (let k = -2; k <= 2; k += 1) R.flat(a + k * 16 - 4, s - ROAD_W / 2 - 10, 8, 20, 0.13, '#e8e8e8');
+    const hsh = (a * 7 + s * 13) % 10;
+    if (hsh < 3) R.cyl(a + 62, 0, s + 62, 4, 12, '#c0392b', 6);
+    else if (hsh < 6) { R.box(a - 62, 6, s + 62, 30, 4, 10, '#8a6b46'); R.box(a - 62, 12, s + 62, 30, 8, 3, '#8a6b46'); }
+    else { R.box(a - 62, 14, s - 62, 3, 28, 3, '#2f3542'); R.box(a - 62, 30, s - 62, 16, 10, 2, '#0984e3'); }
+  }
   for (const pk of G.world.parks) R.flat(pk.x, pk.z, pk.w, pk.d, 0.06, PALETTE.grassDry);
-  const glass = night ? '#ffd97a' : PALETTE.glass;
   for (const b of G.world.buildings) {
     const h = b.floors * FLOOR_H, cx = b.x + b.w / 2, cz = b.z + b.d / 2;
-    R.box(cx, h / 2, cz, b.w, h, b.d, b.color);
+    if (b.floors >= 5) {
+      R.box(cx, h * 0.35, cz, b.w, h * 0.7, b.d, b.color);
+      R.box(cx, h * 0.85, cz, b.w * 0.78, h * 0.3, b.d * 0.78, b.color);
+    } else R.box(cx, h / 2, cz, b.w, h, b.d, b.color);
     R.box(cx, h + 3, cz, b.w - 10, 6, b.d - 10, '#5b6470');
     if (b.floors >= 3) {
-      R.box(cx, h * 0.55, cz + b.d / 2 + 1, b.w * 0.7, h * 0.6, 2, glass);
-      R.box(cx + b.w / 2 + 1, h * 0.55, cz, 2, h * 0.6, b.d * 0.7, glass);
+      R.box(cx + b.w * 0.25, h + 10, cz, 14, 8, 14, '#5b6470');
+      R.cyl(cx - b.w * 0.25, h + 6, cz, 2, 26, '#2f3542', 5);
+    }
+    winGrid(R, b, night);
+    if (b.floors <= 2 && (b.seed % 3) < 1) {
+      R.flat(cx - b.w * 0.3, cz + b.d / 2 + 2, b.w * 0.6, 10, 16, '#e74c3c');
+      R.box(cx, 20, cz + b.d / 2 + 3, b.w * 0.4, 6, 2, '#f1c40f');
     }
     if (b.landmark === 'tower') {
       R.cyl(cx, h + 6, cz, 42, 3, '#3a3f47', 12);
@@ -245,6 +300,12 @@ export function render3D(G, R) {
     [sunC[0] - sr[0] * sc + su[0] * sc, sunC[1] - sr[1] * sc + su[1] * sc, sunC[2] - sr[2] * sc + su[2] * sc],
     sunCol, sunDir,
   );
+  if (!night) for (let i = 0; i < 3; i += 1) {
+    const ox = (i - 1) * 420, oy = 150 + (i % 2) * 110, w = 200 + i * 60;
+    const cx = sunC[0] + sr[0] * ox + su[0] * oy, cy = sunC[1] + sr[1] * ox + su[1] * oy, cz = sunC[2] + sr[2] * ox + su[2] * oy;
+    const P = (sx, sy) => [cx + sr[0] * sx * w + su[0] * sy * 26, cy + sr[1] * sx * w + su[1] * sy * 26, cz + sr[2] * sx * w + su[2] * sy * 26];
+    R.quad(P(-1, -1), P(1, -1), P(1, 1), P(-1, 1), [1, 0.82, 0.72, 0.4], sunDir);
+  }
   for (const car of G.cars) if (!car.hidden) drawCar(R, car, time);
   for (const ped of G.peds) if (!ped.hidden) drawPed(R, ped, time);
   drawPlayer(R, G, time);
