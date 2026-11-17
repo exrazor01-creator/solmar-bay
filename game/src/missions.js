@@ -1,6 +1,4 @@
-// Solmar Bay — the story: twelve missions with dialogue, objectives, timers and pay.
-// Each mission is a small state machine; the runner sets markers and HUD text.
-// Vic runs the streets, Marla runs the garage, Dante runs the big jobs.
+// Solmar Bay — the story: twelve hand-built missions plus ten data-driven ones
 import { PLACES, MISSION_REWARDS, RACE_COURSE, GUN_H } from './config.js';
 import { dist, clamp, angleDiff } from './random.js';
 import { spawnCar } from './traffic.js';
@@ -8,9 +6,7 @@ import { spawnHeli, spawnBoat } from './vehicles.js';
 import { addWanted } from './police.js';
 import { spawnBullet } from './combat.js';
 import { saveGame } from './save.js';
-
 const D = (who, text) => ({ who, text });
-
 export const MISSIONS = [
   {
     title: 'First Wheels', giver: 'Marla',
@@ -238,7 +234,6 @@ export const MISSIONS = [
         G.missions.marker = { x: RACE_COURSE[0].x, z: RACE_COURSE[0].z, label: 'Checkpoint 1/4' };
         G.audio.jingle();
       } else if (m.stage === 1) {
-        // The rivals drive the course on their own.
         for (const r of m.data.racers) {
           if (r.dead) continue;
           const target = RACE_COURSE[Math.min(r.cp, RACE_COURSE.length - 1)];
@@ -289,12 +284,98 @@ export const MISSIONS = [
           }
         } else m.progress = Math.max(0, m.progress - dt / 2);
       } else if (m.stage === 2 && dist(p.x, p.z, PLACES.hideout.x, PLACES.hideout.z) < 130) {
-        completeMission(G, true);
+        completeMission(G);
       }
     },
   },
+  {
+    title: 'The Drop', giver: 'Dante',
+    intro: [D('Dante', 'A courier job. Quiet money. The docks, then the hotel — seventy-five seconds.')],
+    steps: [
+      { k: 'go', x: 400, z: 1900, label: 'The Docks', obj: 'Pick up the drop at the docks' },
+      { k: 'timed', x: 2400, z: 300, t: 75, label: 'Hotel Solmar', obj: 'Deliver to the hotel — 75s!', fail: 'Too slow — the buyer walked.' },
+    ],
+  },
+  {
+    title: 'Hot Wheels', giver: 'Marla',
+    intro: [D('Marla', 'A pink supercar sits in the mall lot. Two guards. It is not theirs anymore.')],
+    steps: [
+      { k: 'go', x: 2200, z: 1680, label: 'Bayview Mall', obj: 'Get to the mall lot' },
+      { k: 'kill', guards: [[2140, 1640], [2260, 1720]], label: 'Mall Guards', obj: 'Take out the two guards' },
+      { k: 'enter', veh: { kind: 'supercar', x: 2200, z: 1680, color: '#e84393' }, label: 'Pink Supercar', obj: 'Steal the pink supercar (E)' },
+      { k: 'car', x: 800, z: 1180, label: 'Garage Marla', obj: 'Bring it to the garage' },
+    ],
+  },
+  {
+    title: 'Sky Hook', giver: 'Dante',
+    intro: [D('Dante', 'Cargo is coming in by air. Meet it at the airport, then bring the heli home.')],
+    steps: [
+      { k: 'go', x: 2800, z: 300, label: 'Helipad', obj: 'Get to the helipad and take the helicopter' },
+      { k: 'heli', x: 3010, z: 470, alt: 40, label: 'Solmar International', obj: 'Fly to the airport — stay above the roofs' },
+      { k: 'land', x: 2800, z: 300, label: 'Helipad', obj: 'Land back at the helipad' },
+    ],
+  },
+  {
+    title: "Sniper's Perch", giver: 'Dante',
+    intro: [D('Dante', 'Three of the harbor crew need to stop working. Tonight. Here is a rifle — make it count.')],
+    steps: [
+      { k: 'kill', guards: [[2740, 1660], [2860, 1740], [2800, 1600]], give: 'sniper', label: 'Harbor Crew', obj: 'Take out the three harbor guards (sniper provided)' },
+      { k: 'go', x: 400, z: 1900, label: 'Hideout', obj: 'Slip away to the hideout' },
+    ],
+  },
+  {
+    title: 'The Bus Job', giver: 'Marla',
+    intro: [D('Marla', 'The city bus is parked at the depot. Big, slow, and worth more than it looks.')],
+    steps: [
+      { k: 'enter', veh: { kind: 'bus', x: 2750, z: 1850, color: '#27ae60' }, label: 'City Bus', obj: 'Steal the city bus at the depot (E)' },
+      { k: 'car', x: 800, z: 1180, label: 'Garage Marla', obj: 'Drive the bus to the garage' },
+    ],
+  },
+  {
+    title: 'Storm Run', giver: 'Dante',
+    intro: [D('Dante', 'Rain is coming. The lighthouse keeper is waiting, and he does not wait long.')],
+    steps: [
+      { k: 'go', x: 400, z: 1900, label: 'The Docks', obj: 'Pick up the storm parcel at the docks' },
+      { k: 'timed', x: 3050, z: 2100, t: 100, label: 'Lighthouse', obj: 'Deliver to the lighthouse — 100s!', fail: 'The keeper gave up. The parcel is back at the docks.' },
+    ],
+  },
+  {
+    title: 'Club Neon', giver: 'Luna',
+    intro: [D('Luna', 'Club Neon, midnight. Make some noise, get the cops on you, then vanish before they see your face.')],
+    steps: [
+      { k: 'go', x: 1360, z: 430, label: 'Club Neon', obj: 'Get to Club Neon' },
+      { k: 'wanted', n: 2, label: 'Heat', obj: 'Cause trouble — hit 2 stars' },
+      { k: 'calm', label: 'Hideout', obj: 'Lose the heat, then reach the hideout' },
+      { k: 'go', x: 400, z: 1900, label: 'Hideout', obj: 'Reach the hideout' },
+    ],
+  },
+  {
+    title: 'The Airport Run', giver: 'Dante',
+    intro: [D('Dante', 'Cargo lands at the terminal. Load it — four seconds at the doors — then run it to the harbor.')],
+    steps: [
+      { k: 'go', x: 3010, z: 470, label: 'Solmar International', obj: 'Get to the airport terminal' },
+      { k: 'hold', x: 3010, z: 470, s: 4, label: 'Terminal Doors', obj: 'Hold E at the terminal doors to load the cargo' },
+      { k: 'timed', x: 2800, z: 1700, t: 90, label: 'Harbor', obj: 'Deliver to the harbor — 90s!', fail: 'The cargo missed its boat.' },
+    ],
+  },
+  {
+    title: 'Gang War', giver: 'Dante',
+    intro: [D('Dante', 'The dock gang moved on our turf. Five of them. End it, then come home.')],
+    steps: [
+      { k: 'kill', guards: [[360, 1860], [440, 1940], [400, 1820], [340, 1960], [460, 1880]], label: 'Dock Gang', obj: 'Take out the five dock gang members' },
+      { k: 'go', x: 400, z: 1900, label: 'Hideout', obj: 'Get back to the hideout' },
+    ],
+  },
+  {
+    title: 'The Crown', giver: 'Dante', finale: true,
+    intro: [D('Dante', 'The bank again. Bigger vault, six stars, SWAT on the ground. This is the crown, kid.'), D('Dante', 'Crack it, then run. If we walk out of this, Solmar Bay is ours — all of it.')],
+    steps: [
+      { k: 'go', x: 1600, z: 700, label: 'Solmar First Bank', obj: 'Get to the bank — one last crown' },
+      { k: 'hold', x: 1600, z: 700, s: 6, add: 12, why: 'THE CROWN — six stars, SWAT is coming', label: 'The Vault', obj: 'Hold E at the vault to crack it (6s)' },
+      { k: 'go', x: 400, z: 1900, label: 'Hideout', obj: 'Six stars! Run the gauntlet to the hideout' },
+    ],
+  },
 ];
-
 function guardFire(G, dt) {
   for (const g of G.peds) {
     if (g.kind !== 'guard' || g.state === 'dead') continue;
@@ -308,51 +389,100 @@ function guardFire(G, dt) {
     }
   }
 }
-
+function spawnGuard(G, x, z) {
+  const g = { x, z, angle: 0, speed: 0, state: 'walk', kind: 'guard', hp: 100, tx: x, tz: z, waitT: 99, fleeT: 0, color: '#2c3e50', seed: G.rng(), shootCd: 1 };
+  G.peds.push(g);
+  return g;
+}
+export function dslSetup(G) {
+  const m = G.missions;
+  m.step = 0; m.stepInit = -1; m.data = {};
+}
+function dslUpdate(G, dt) {
+  const m = G.missions, def = m.def, steps = def.steps;
+  if (m.step >= steps.length) { completeMission(G, def.finale); return; }
+  const s = steps[m.step], p = G.player;
+  guardFire(G, dt);
+  if (m.stepInit !== m.step) {
+    m.stepInit = m.step; m.timer = s.t || 0; m.progress = 0;
+    if (s.guards) m.data.guards = s.guards.map(([gx, gz]) => spawnGuard(G, gx, gz));
+    if (s.veh) {
+      const c = spawnCar(G, s.veh.x, s.veh.z, s.veh.kind, 'parked');
+      if (s.veh.color) c.color = s.veh.color;
+      m.data.veh = c;
+    }
+    if (s.give === 'sniper' && !p.ownsSniper) { p.ownsSniper = true; p.sniperMag = 5; G.banner = { text: 'Sniper rifle provided — 5 rounds. Make them count.', t: 3 }; }
+    G.missions.marker = s.x !== undefined ? { x: s.x, z: s.z, label: s.label } : null;
+    G.missions.objective = s.obj;
+  }
+  let done = false;
+  if (s.k === 'go') done = dist(p.x, p.z, s.x, s.z) < 110;
+  else if (s.k === 'car') done = !!p.inCar && dist(p.x, p.z, s.x, s.z) < 120;
+  else if (s.k === 'timed') {
+    m.timer -= dt;
+    done = dist(p.x, p.z, s.x, s.z) < 120;
+    if (!done && m.timer <= 0) { failMission(G, s.fail || 'Too slow.'); return; }
+  } else if (s.k === 'hold') {
+    const near = dist(p.x, p.z, s.x, s.z) < 110;
+    if (near && G.input.keys.has('e')) {
+      m.progress += dt / s.s;
+      if (m.progress >= 1) done = true;
+    } else m.progress = Math.max(0, m.progress - dt / 2);
+  } else if (s.k === 'wanted') done = G.wanted.stars >= s.n;
+  else if (s.k === 'calm') done = G.wanted.stars === 0;
+  else if (s.k === 'boat') done = !!p.inCar && p.inCar.kind === 'boat' && dist(p.x, p.z, s.x, s.z) < 130;
+  else if (s.k === 'heli') done = !!p.inCar && p.inCar.kind === 'heli' && p.inCar.y > (s.alt || 40) && dist(p.x, p.z, s.x, s.z) < 90;
+  else if (s.k === 'land') done = !!p.inCar && p.inCar.kind === 'heli' && p.inCar.y <= 0 && dist(p.x, p.z, s.x, s.z) < 100;
+  else if (s.k === 'kill') done = (m.data.guards || []).every((g) => g.state === 'dead');
+  else if (s.k === 'enter') done = p.inCar === m.data.veh;
+  if (done) {
+    if (s.add) addWanted(G, s.add, s.why || '');
+    m.step += 1; m.stepInit = -1; m.progress = 0;
+    if (m.step >= steps.length) completeMission(G, def.finale);
+  }
+}
 export function startMission(G, index) {
   const def = MISSIONS[index];
-  G.missions = { index, stage: 0, timer: 0, progress: 0, data: {}, marker: null, objective: '', dialog: def.intro.slice(), dialogIdx: 0, def };
+  G.missions = { index, stage: 0, timer: 0, progress: 0, data: {}, marker: null, objective: '', dialog: def.intro.slice(), dialogIdx: 0, def, step: 0, stepInit: -1 };
   G.state = 'dialog';
 }
-
 export function advanceDialog(G) {
   const m = G.missions;
   m.dialogIdx += 1;
   if (m.dialogIdx >= m.dialog.length) {
-    m.def.setup(G);
+    (m.def.setup || dslSetup)(G);
     G.state = 'playing';
     G.banner = { text: `Mission ${m.index + 1} — ${m.def.title}`, t: 3 };
   }
 }
-
 export function completeMission(G, finale) {
   const m = G.missions;
   const reward = MISSION_REWARDS[m.index];
   G.player.money += reward;
   G.stats.earned += reward;
   G.stats.missionsDone += 1;
+  if (G.player.safehouse) { G.player.bank = (G.player.bank || 0) + 100; }
   G.audio.jingle(); G.audio.cash();
   G.banner = { text: `Mission complete — ${m.def.title}  +$${reward}`, t: 4 };
-  if (finale) {
+  if (finale || m.index >= MISSIONS.length - 1) {
     G.state = 'complete';
     G.missions.done = true;
     G.missions.objective = 'Free roam — Solmar Bay is yours. The story is complete.';
+    saveGame(G);
     return;
   }
   saveGame(G);
   startMission(G, m.index + 1);
 }
-
 export function failMission(G, why) {
   G.banner = { text: why, t: 4 };
   G.audio.fail();
-  // Restart the same mission from its intro.
   startMission(G, G.missions.index);
 }
-
 export function updateMissions(G, dt) {
   const m = G.missions;
   if (!m || !m.def || m.index >= MISSIONS.length) return;
   if (G.state !== 'playing') return;
-  m.def.update(G, dt);
+  if (m.done) return; // story finished — free roam, the runner must not re-complete
+  (m.def.update || dslUpdate)(G, dt);
 }

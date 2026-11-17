@@ -1,46 +1,40 @@
-// Solmar Bay — traffic cars that drive the road grid and pedestrians who walk the
-// sidewalks (and run from gunfire). Both are seeded so the city is the same every run.
 import { AVENUES, STREETS, WORLD, BEACH_Z, TUNE, CAR_STATS } from './config.js';
 import { range, pick, clamp, dist, angleDiff } from './random.js';
 import { collideCircle, nearestIntersection } from './world.js';
-
 const CAR_COLORS = ['#f7c948', '#c0392b', '#8e44ad', '#7f8c8d', '#16a085', '#e67e22', '#2ecc71', '#ecf0f1'];
-const TRAFFIC_KINDS = ['sedan', 'sedan', 'sedan', 'sedan', 'taxi', 'taxi', 'truck', 'truck', 'bike', 'van'];
-const PARKED_KINDS = ['sedan', 'sedan', 'sport', 'sport', 'truck', 'bike', 'van'];
+const TRAFFIC_KINDS = ['sedan', 'sedan', 'sedan', 'sedan', 'taxi', 'taxi', 'truck', 'truck', 'bike', 'van', 'suv', 'suv', 'bus', 'supercar'];
+const PARKED_KINDS = ['sedan', 'sedan', 'sport', 'sport', 'supercar', 'suv', 'truck', 'bike', 'van', 'bus'];
 let nextId = 1;
-
 function randomRoadPoint(rng) {
   if (rng() < 0.5) return { x: pick(rng, AVENUES), z: range(rng, 120, BEACH_Z - 120) };
   return { x: range(rng, 120, WORLD.w - 120), z: pick(rng, STREETS) };
 }
-
 export function spawnCar(G, x, z, kind, driver) {
   const s = CAR_STATS[kind] || CAR_STATS.sedan;
   const car = {
     id: nextId, x, z, y: 0, angle: 0, speed: 0,
-    color: kind === 'taxi' ? '#f7c948' : kind === 'sport' ? '#8e44ad' : kind === 'police' ? '#1e40af' : kind === 'truck' ? '#7f8c8d' : kind === 'van' ? '#16a085' : kind === 'bike' ? '#e67e22' : pick(G.rng, CAR_COLORS),
+    color: kind === 'taxi' ? '#f7c948' : kind === 'sport' ? '#8e44ad' : kind === 'police' ? '#1e40af'
+      : kind === 'truck' ? '#7f8c8d' : kind === 'van' ? '#16a085' : kind === 'bike' ? '#e67e22'
+      : kind === 'bus' ? '#27ae60' : kind === 'supercar' ? '#e84393' : kind === 'suv' ? '#6c5ce7' : pick(G.rng, CAR_COLORS),
     kind: kind || 'sedan', driver: driver || 'traffic',
     hp: s.hp, maxHp: s.hp, maxSpeed: s.max, accel: s.accel, turn: s.turn, radius: s.r,
-    dead: false, target: null, waitT: 0, honkT: 0,
+    dead: false, target: null, waitT: 0, honkT: 0, airT: 0, vy: 0, airBest: 0,
   };
   nextId += 1;
   if (driver === 'traffic') {
     const it = nearestIntersection(x, z);
     car.target = { x: it.x, z: it.z };
     car.angle = Math.atan2(it.z - z, it.x - x);
-    car.speed = range(G.rng, 120, 190) * (kind === 'truck' ? 0.7 : kind === 'bike' ? 1.15 : 1);
+    car.speed = range(G.rng, 120, 190) * (kind === 'truck' ? 0.7 : kind === 'bus' ? 0.6 : kind === 'bike' ? 1.15 : kind === 'supercar' ? 1.2 : 1);
   }
   G.cars.push(car);
   return car;
 }
-
 export function spawnTraffic(G) {
   for (let i = 0; i < TUNE.trafficCount; i += 1) {
     const pt = randomRoadPoint(G.rng);
     spawnCar(G, pt.x + range(G.rng, -20, 20), pt.z + range(G.rng, -20, 20), pick(G.rng, TRAFFIC_KINDS), 'traffic');
   }
-  // Parked cars along the curbs — but keep the helipad and the marina clear, so the
-  // helicopter and the boats are always the nearest thing to board there.
   for (let i = 0; i < 10; i += 1) {
     const pt = randomRoadPoint(G.rng);
     if (dist(pt.x, pt.z, 2800, 300) < 180 || dist(pt.x, pt.z, 400, 2290) < 180) continue;
@@ -50,7 +44,6 @@ export function spawnTraffic(G) {
     c.speed = 0;
   }
 }
-
 export function spawnPeds(G) {
   for (let i = 0; i < TUNE.pedCount; i += 1) {
     const pt = randomRoadPoint(G.rng);
@@ -62,18 +55,15 @@ export function spawnPeds(G) {
     });
   }
 }
-
 function steerToward(car, tx, tz, dt, maxSpeed) {
   const want = Math.atan2(tz - car.z, tx - car.x);
   const diff = angleDiff(car.angle, want);
   car.angle += clamp(diff, -2.2 * dt, 2.2 * dt);
   car.speed = clamp(car.speed + 260 * dt, 0, maxSpeed);
 }
-
 export function updateTraffic(G, dt) {
   for (const car of G.cars) {
     if (car.dead || car.driver !== 'traffic') continue;
-    // Slow down for the car ahead.
     let blocked = false;
     for (const o of G.cars) {
       if (o === car || o.dead) continue;
@@ -86,12 +76,10 @@ export function updateTraffic(G, dt) {
     if (blocked) {
       car.speed = Math.max(0, car.speed - 500 * dt);
       car.waitT += dt;
-      // Stuck in a jam for too long: pick a new route instead of waiting forever.
       if (car.waitT > 3) { car.target = null; car.waitT = 0; }
     } else {
       car.waitT = 0;
       if (!car.target || dist(car.x, car.z, car.target.x, car.target.z) < 40) {
-        // At an intersection: keep going or turn onto the crossing road.
         const it = nearestIntersection(car.x, car.z);
         const opts = [];
         const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]];
@@ -108,7 +96,6 @@ export function updateTraffic(G, dt) {
     const fixed = collideCircle(G, nx, nz, car.radius);
     if (fixed.hit) { car.speed *= 0.5; car.target = null; }
     car.x = fixed.x; car.z = fixed.z;
-    // Gentle car-car separation.
     for (const o of G.cars) {
       if (o === car || o.dead) continue;
       const d = dist(car.x, car.z, o.x, o.z);
@@ -118,14 +105,12 @@ export function updateTraffic(G, dt) {
       }
     }
   }
-  // Keep the streets busy: replace cars that despawned far away.
   const traffic = G.cars.filter((c) => c.driver === 'traffic' && !c.dead);
   if (traffic.length < TUNE.trafficCount && G.rng() < dt * 0.5) {
     const pt = randomRoadPoint(G.rng);
     if (dist(pt.x, pt.z, G.player.x, G.player.z) > 700) spawnCar(G, pt.x, pt.z, 'sedan', 'traffic');
   }
 }
-
 export function updatePeds(G, dt) {
   for (const ped of G.peds) {
     if (ped.state === 'dead') { ped.deadT = (ped.deadT || 0) + dt; continue; }
@@ -139,13 +124,11 @@ export function updatePeds(G, dt) {
       if (ped.fleeT <= 0) { ped.state = 'walk'; ped.tx = ped.x; ped.tz = ped.z; }
       continue;
     }
-    // Gunfire nearby makes walkers run.
     const gun = G.bullets.length > 0 && G.bullets.some((b) => b.from === 'player' && dist(b.x, b.z, ped.x, ped.z) < 260);
     if (gun) { ped.state = 'flee'; ped.fleeT = 3; ped.fx = ped.x + (ped.x - G.player.x); ped.fz = ped.z + (ped.z - G.player.z); continue; }
     ped.waitT -= dt;
     if (dist(ped.x, ped.z, ped.tx, ped.tz) < 12 || ped.waitT <= 0) {
       if (ped.waitT <= -2 || dist(ped.x, ped.z, ped.tx, ped.tz) < 12) {
-        // New stroll target: a nearby sidewalk point.
         const pt = randomRoadPoint(G.rng);
         ped.tx = clamp(pt.x + (G.rng() - 0.5) * 120, 60, WORLD.w - 60);
         ped.tz = clamp(pt.z + (G.rng() - 0.5) * 120, 60, BEACH_Z - 60);
@@ -159,7 +142,6 @@ export function updatePeds(G, dt) {
     const fixed = collideCircle(G, nx, nz, 10);
     ped.x = fixed.x; ped.z = fixed.z;
   }
-  // Top up pedestrians near the player.
   const alive = G.peds.filter((p) => p.state !== 'dead');
   if (alive.length < TUNE.pedCount && G.rng() < dt * 0.4) {
     const pt = randomRoadPoint(G.rng);

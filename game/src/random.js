@@ -1,4 +1,3 @@
-// Solmar Bay — seeded random numbers (mulberry32). Deterministic world, traffic and shots.
 export function mulberry32(seed) {
   let a = seed >>> 0;
   return function next() {
@@ -14,7 +13,6 @@ export function pick(rng, arr) { return arr[Math.floor(rng() * arr.length)]; }
 export function chance(rng, p) { return rng() < p; }
 export function clamp(v, lo, hi) { return v < lo ? lo : v > hi ? hi : v; }
 export function lerp(a, b, t) { return a + (b - a) * t; }
-// 2D distance on the ground plane (x, z) — the whole game plays on this plane.
 export function dist(x1, z1, x2, z2) { const dx = x2 - x1, dz = z2 - z1; return Math.sqrt(dx * dx + dz * dz); }
 export function dist3(x1, y1, z1, x2, y2, z2) { return Math.hypot(x2 - x1, y2 - y1, z2 - z1); }
 export function angleTo(x1, z1, x2, z2) { return Math.atan2(z2 - z1, x2 - x1); }

@@ -1,10 +1,4 @@
-// Solmar Bay — a tiny hand-written WebGL engine. No libraries: one shader, one dynamic
-// buffer, immediate-mode boxes/quads/cylinders, per-vertex colours, a directional sun
-// + ambient light, distance fog, and a chase camera with a mouse ray for aiming.
-// Everything is drawn in a single pass per frame (flushed when the buffer fills).
 import { clamp, lerp } from './random.js';
-
-// ---- 4x4 matrices, column-major as WebGL expects ----
 function matPerspective(fov, aspect, near, far) {
   const f = 1 / Math.tan(fov / 2), nf = 1 / (near - far);
   const m = new Float32Array(16);
@@ -33,8 +27,6 @@ function matMul(a, b) {
   return o;
 }
 const norm3 = (v) => { const l = Math.hypot(v[0], v[1], v[2]) || 1; return [v[0] / l, v[1] / l, v[2] / l]; };
-
-// ---- sky / light keyframes by time of day (0 = midnight, 0.5 = noon) ----
 const SKY_KEYS = [
   { t: 0.00, sky: [0.05, 0.07, 0.16], sun: [0.22, 0.28, 0.50], amb: [0.16, 0.18, 0.28], dir: [0.3, 0.6, 0.4] },
   { t: 0.20, sky: [0.05, 0.07, 0.16], sun: [0.22, 0.28, 0.50], amb: [0.16, 0.18, 0.28], dir: [0.3, 0.6, 0.4] },
@@ -58,8 +50,6 @@ export function skyAt(tod) {
     dir: norm3(mix(a.dir, b.dir)), night, fogNear: night ? 320 : 500, fogFar: night ? 1700 : 2600,
   };
 }
-
-// ---- colour parsing (cached) ----
 const colorCache = new Map();
 export function parseColor(c) {
   if (Array.isArray(c)) return c.length === 3 ? [c[0], c[1], c[2], 1] : c;
@@ -70,7 +60,6 @@ export function parseColor(c) {
   colorCache.set(c, hit);
   return hit;
 }
-
 const VS = `attribute vec3 aPos; attribute vec4 aColor; attribute vec3 aNormal;
 uniform mat4 uVP; uniform vec3 uCamPos; uniform vec3 uLightDir; uniform vec3 uLightCol;
 uniform vec3 uAmbient; uniform float uFogNear; uniform float uFogFar;
@@ -87,7 +76,6 @@ void main(){
 const FS = `precision mediump float;
 varying vec4 vColor; varying float vFog; uniform vec3 uFogColor;
 void main(){ vec3 c = mix(vColor.rgb, uFogColor, vFog); gl_FragColor = vec4(c, vColor.a); }`;
-
 export function createRenderer(canvas) {
   const gl = canvas.getContext('webgl', { preserveDrawingBuffer: true, antialias: true, alpha: false });
   if (!gl) throw new Error('WebGL is not available');
@@ -113,7 +101,6 @@ export function createRenderer(canvas) {
   gl.enable(gl.DEPTH_TEST);
   gl.enable(gl.BLEND);
   gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
-
   const R = {
     gl, w: canvas.width, h: canvas.height, fov: 60 * Math.PI / 180, aspect: canvas.width / canvas.height,
     eye: [0, 0, 0], fwd: [0, 0, -1], right: [1, 0, 0], up: [0, 1, 0], tanHalf: Math.tan((60 * Math.PI / 180) / 2),
@@ -124,7 +111,6 @@ export function createRenderer(canvas) {
       const proj = matPerspective(this.fov, this.aspect, 1, 6000);
       this.vp = matMul(proj, view);
       this.fwd = norm3([target[0] - eye[0], target[1] - eye[1], target[2] - eye[2]]);
-      // right = fwd x world-up = (-fwd.z, 0, fwd.x); up = right x fwd.
       this.right = norm3([-this.fwd[2], 0, this.fwd[0]]);
       const cr = this.right, f = this.fwd;
       this.up = norm3([cr[1] * f[2] - cr[2] * f[1], cr[2] * f[0] - cr[0] * f[2], cr[0] * f[1] - cr[1] * f[0]]);
@@ -158,11 +144,9 @@ export function createRenderer(canvas) {
       this.idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
       this.tris += 2;
     },
-    // Flat horizontal quad, normal +Y. Corners in counter-clockwise order seen from above.
     flat(x, z, w, d, y, color) {
       this.quad([x, y, z], [x + w, y, z], [x + w, y, z + d], [x, y, z + d], color, [0, 1, 0]);
     },
-    // Box centred at (cx, cy, cz), size (w, h, d), optionally rotated around Y by ry.
     box(cx, cy, cz, w, h, d, color, ry) {
       const c = parseColor(color);
       const hx = w / 2, hy = h / 2, hz = d / 2;
@@ -170,21 +154,19 @@ export function createRenderer(canvas) {
       const rot = (x, z) => [cx + x * cos - z * sin, cz + x * sin + z * cos];
       const corner = (sx, sy, sz) => { const [x, z] = rot(sx * hx, sz * hz); return [x, cy + sy * hy, z]; };
       const F = [
-        { n: [0, 1, 0], pts: [[-1, 1, -1], [1, 1, -1], [1, 1, 1], [-1, 1, 1]] }, // top
-        { n: [0, -1, 0], pts: [[-1, -1, 1], [1, -1, 1], [1, -1, -1], [-1, -1, -1]] }, // bottom
-        { n: [0, 0, 1], pts: [[-1, -1, 1], [1, -1, 1], [1, 1, 1], [-1, 1, 1]] }, // south
-        { n: [0, 0, -1], pts: [[1, -1, -1], [-1, -1, -1], [-1, 1, -1], [1, 1, -1]] }, // north
-        { n: [1, 0, 0], pts: [[1, -1, 1], [1, -1, -1], [1, 1, -1], [1, 1, 1]] }, // east
-        { n: [-1, 0, 0], pts: [[-1, -1, -1], [-1, -1, 1], [-1, 1, 1], [-1, 1, -1]] }, // west
+        { n: [0, 1, 0], pts: [[-1, 1, -1], [1, 1, -1], [1, 1, 1], [-1, 1, 1]] },
+        { n: [0, -1, 0], pts: [[-1, -1, 1], [1, -1, 1], [1, -1, -1], [-1, -1, -1]] },
+        { n: [0, 0, 1], pts: [[-1, -1, 1], [1, -1, 1], [1, 1, 1], [-1, 1, 1]] },
+        { n: [0, 0, -1], pts: [[1, -1, -1], [-1, -1, -1], [-1, 1, -1], [1, 1, -1]] },
+        { n: [1, 0, 0], pts: [[1, -1, 1], [1, -1, -1], [1, 1, -1], [1, 1, 1]] },
+        { n: [-1, 0, 0], pts: [[-1, -1, -1], [-1, -1, 1], [-1, 1, 1], [-1, 1, -1]] },
       ];
       for (const f of F) {
-        // Rotate the face normal the same way as the corners.
         const nx = f.n[0] * cos - f.n[2] * sin, nz = f.n[0] * sin + f.n[2] * cos;
         const pts = f.pts.map((p) => corner(p[0], p[1], p[2]));
         this.quad(pts[0], pts[1], pts[2], pts[3], c, [nx, f.n[1], nz]);
       }
     },
-    // Vertical prism (cylinder with `sides` faces), base at y, height h.
     cyl(x, y, z, r, h, color, sides) {
       const s = sides || 8, c = parseColor(color);
       const top = [], bot = [];
@@ -198,7 +180,6 @@ export function createRenderer(canvas) {
         const a = (i / s) * Math.PI * 2, nx = Math.cos(a + Math.PI / s), nz = Math.sin(a + Math.PI / s);
         this.quad(bot[i], bot[j], top[j], top[i], c, [nx, 0, nz]);
       }
-      // Top cap as a fan around the centre.
       const tc = [x, y + h, z];
       for (let i = 0; i < s; i += 1) {
         const j = (i + 1) % s, base = this.vc;
@@ -206,7 +187,6 @@ export function createRenderer(canvas) {
         this.idx.push(base, base + 1, base + 2); this.tris += 1;
       }
     },
-    // Mouse ray to the ground plane (y = 0). Returns { x, z } or null.
     rayGround(mx, my) {
       const nx = (mx / this.w) * 2 - 1, ny = 1 - (my / this.h) * 2;
       const dx = this.fwd[0] + this.right[0] * nx * this.tanHalf * this.aspect + this.up[0] * ny * this.tanHalf;
@@ -216,7 +196,6 @@ export function createRenderer(canvas) {
       const t = -this.eye[1] / dy;
       return { x: this.eye[0] + dx * t, z: this.eye[2] + dz * t };
     },
-    // World -> canvas pixels (for aiming the mouse at a 3D point). Null when behind.
     project(x, y, z) {
       const m = this.vp;
       const cx = m[0] * x + m[4] * y + m[8] * z + m[12];

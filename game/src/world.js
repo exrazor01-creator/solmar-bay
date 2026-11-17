@@ -1,35 +1,36 @@
-// Solmar Bay — city generation and collision. Builds roads, blocks, buildings, trees
-// and parks from a seed; resolves circle-vs-building and circle-vs-world on the
-// ground plane (x, z). The city has districts: Downtown (tall glass), Harbor
-// (warehouses), Suburbs (low houses and parks), Old Town, Midtown, and the Beach —
-// plus two fixed landmarks, Solmar Tower and the Lighthouse, that missions and
-// screenshots can rely on.
 import { AVENUES, STREETS, ROAD_W, WORLD, BEACH_Z, WATER_Z, PALETTE } from './config.js';
 import { range, int, pick, chance } from './random.js';
-
 const ROOFS = [PALETTE.roofA, PALETTE.roofB, PALETTE.roofC, PALETTE.roofD, PALETTE.roofE, PALETTE.roofF];
-
-// Which part of town is this? Used for building style, the HUD label and the minimap.
 export function districtAt(x, z) {
   if (z >= BEACH_Z) return 'Beach';
+  if (x >= 2830 && z < 760) return 'Airport';
   if (x >= 2400 && z >= 1100) return 'Harbor';
   if (x >= 1200 && x < 2400 && z < 1100) return 'Downtown';
   if (x < 1200 && z >= 1100) return 'Suburbs';
   if (x < 1200) return 'Old Town';
   return 'Midtown';
 }
-
 export function isWater(x, z) { return z >= WATER_Z; }
 export function isSand(x, z) { return z >= BEACH_Z && z < WATER_Z; }
-
+const AIRPORT = { x0: 2830, x1: 3200, z0: 130, z1: 760 };
+function inAirport(x, z, w, d) {
+  return x < AIRPORT.x1 && x + w > AIRPORT.x0 && z < AIRPORT.z1 && z + d > AIRPORT.z0;
+}
 export function buildWorld(rng) {
   const buildings = [];
   const trees = [];
   const parks = [];
-  // Fixed landmarks first, so the random blocks below never overlap them.
   buildings.push({ x: 1700, z: 1200, w: 200, d: 200, color: PALETTE.tower, floors: 12, seed: 7, landmark: 'tower' });
   buildings.push({ x: 3030, z: 2080, w: 40, d: 40, color: '#ecf0f1', floors: 3, seed: 11, landmark: 'lighthouse' });
-  // Blocks sit between neighbouring avenues / streets.
+  buildings.push({ x: 2900, z: 400, w: 220, d: 140, color: '#b0bec5', floors: 3, seed: 21, landmark: 'terminal' });
+  buildings.push({ x: 3080, z: 380, w: 30, d: 30, color: '#78909c', floors: 8, seed: 22, landmark: 'controltower' });
+  buildings.push({ x: 2070, z: 1600, w: 260, d: 160, color: '#dfe6e9', floors: 3, seed: 23, landmark: 'mall' });
+  buildings.push({ x: 1300, z: 380, w: 120, d: 100, color: '#2d3436', floors: 2, seed: 24, landmark: 'club' });
+  buildings.push({ x: 2470, z: 1570, w: 100, d: 80, color: '#fdcb6e', floors: 1, seed: 25, landmark: 'gas' });
+  buildings.push({ x: 870, z: 370, w: 140, d: 100, color: '#74b9ff', floors: 3, seed: 26, landmark: 'pd' });
+  buildings.push({ x: 1670, z: 1570, w: 110, d: 90, color: '#fab1a0', floors: 1, seed: 27, landmark: 'diner' });
+  buildings.push({ x: 2070, z: 370, w: 100, d: 80, color: '#a29bfe', floors: 2, seed: 28, landmark: 'clothes' });
+  buildings.push({ x: 2470, z: 370, w: 160, d: 120, color: '#ffffff', floors: 4, seed: 29, landmark: 'hospital' });
   const xs = [0, ...AVENUES, WORLD.w];
   const zs = [0, ...STREETS, BEACH_Z];
   for (let bi = 0; bi < xs.length - 1; bi += 1) {
@@ -66,13 +67,13 @@ export function buildWorld(rng) {
           color = pick(rng, ROOFS);
         }
         const x = range(rng, x0, x1 - w), z = range(rng, z0, z1 - d);
+        if (inAirport(x, z, w, d)) continue;
         const b = { x, z, w, d, color, floors, seed: rng() * 100 };
         if (buildings.some((o) => o.x < b.x + b.w + 18 && o.x + o.w + 18 > b.x && o.z < b.z + b.d + 18 && o.z + o.d + 18 > b.z)) continue;
         buildings.push(b);
       }
     }
   }
-  // Palms along sidewalks and the beach front (never in the water).
   for (let i = 0; i < 70; i += 1) {
     const av = pick(rng, AVENUES), st = pick(rng, STREETS);
     const side = chance(rng, 0.5);
@@ -83,22 +84,18 @@ export function buildWorld(rng) {
   for (let i = 0; i < 22; i += 1) trees.push({ x: range(rng, 120, WORLD.w - 120), z: range(rng, BEACH_Z + 30, WATER_Z - 20), s: range(rng, 0.8, 1.3) });
   return { buildings, trees, parks };
 }
-
 export function onRoad(x, z) {
   if (z >= BEACH_Z) return false;
   for (const a of AVENUES) if (Math.abs(x - a) <= ROAD_W / 2) return true;
   for (const s of STREETS) if (Math.abs(z - s) <= ROAD_W / 2) return true;
   return false;
 }
-
 export function roadLane(x, z) {
-  // Nearest road centre and which side of it the point sits on (+1 / -1).
   let best = null;
   for (const a of AVENUES) { const d = Math.abs(x - a); if (!best || d < best.d) best = { d, axis: 'x', c: a, side: x >= a ? 1 : -1 }; }
   for (const s of STREETS) { const d = Math.abs(z - s); if (!best || d < best.d) best = { d, axis: 'z', c: s, side: z >= s ? 1 : -1 }; }
   return best;
 }
-
 export function nearestIntersection(x, z) {
   let bx = AVENUES[0], bz = STREETS[0], bd = Infinity;
   for (const a of AVENUES) for (const s of STREETS) {
@@ -107,8 +104,6 @@ export function nearestIntersection(x, z) {
   }
   return { x: bx, z: bz };
 }
-
-// Push a circle out of buildings and the world edge. Returns true when a hit happened.
 export function collideCircle(G, x, z, r) {
   let hit = false;
   for (const b of G.world.buildings) {
@@ -121,7 +116,6 @@ export function collideCircle(G, x, z, r) {
         const d = Math.sqrt(d2), push = (r - d) / d;
         x += dx * push; z += dz * push;
       } else {
-        // Centre inside the box: push out along the smallest penetration axis.
         const pl = x - b.x, pr = b.x + b.w - x, pt = z - b.z, pb = b.z + b.d - z;
         const m = Math.min(pl, pr, pt, pb);
         if (m === pl) x = b.x - r; else if (m === pr) x = b.x + b.w + r;
@@ -134,7 +128,6 @@ export function collideCircle(G, x, z, r) {
   if (nx !== x || nz !== z) hit = true;
   return { x: nx, z: nz, hit };
 }
-
 export function pointInBuilding(G, x, z) {
   return G.world.buildings.some((b) => x >= b.x && x <= b.x + b.w && z >= b.z && z <= b.z + b.d);
 }

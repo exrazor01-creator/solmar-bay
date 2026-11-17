@@ -1,11 +1,7 @@
-// Solmar Bay — side activities for the free-roam city: hidden packages to collect,
-// repeatable taxi fares (T near the taxi stand, in a car) and a street-race time
-// trial (R near the race start, in a car). All of it pays, none of it is required.
 import { PLACES, RACE_COURSE, TUNE, WORLD, BEACH_Z, WATER_Z } from './config.js';
 import { dist, range, pick } from './random.js';
 import { pointInBuilding, onRoad, nearestIntersection } from './world.js';
 import { take } from './input.js';
-
 export function initSide(G) {
   const packages = [];
   let guard = 0;
@@ -20,14 +16,13 @@ export function initSide(G) {
     packages,
     taxi: { active: false, stage: 0, timer: 0, marker: null, pickup: null, drop: null },
     race: { active: false, cp: 0, timer: 0, marker: null },
+    delivery: { active: false, timer: 0, marker: null, drop: null },
   };
 }
-
 function randomRoadSpot(G) {
   const it = nearestIntersection(range(G.rng, 300, WORLD.w - 300), range(G.rng, 200, BEACH_Z - 200));
   return { x: it.x, z: it.z };
 }
-
 function startTaxiFare(G) {
   const t = G.side.taxi;
   const pickup = randomRoadSpot(G);
@@ -40,19 +35,25 @@ function startTaxiFare(G) {
   G.peds.push(ped); t.passenger = ped;
   G.banner = { text: 'Fare waiting — pick them up, then deliver them. $150 on the meter.', t: 3 };
 }
-
 function startRace(G) {
   const r = G.side.race;
   r.active = true; r.cp = 0; r.timer = 0;
   r.marker = { x: RACE_COURSE[0].x, z: RACE_COURSE[0].z, label: 'Checkpoint 1/4' };
   G.banner = { text: `Race! Four checkpoints — beat ${TUNE.racePar}s for $${TUNE.racePay}.`, t: 3 };
 }
-
+function startDelivery(G) {
+  const d = G.side.delivery;
+  let drop = randomRoadSpot(G);
+  let guard = 0;
+  while (dist(PLACES.depot.x, PLACES.depot.z, drop.x, drop.z) < 800 && guard < 20) { drop = randomRoadSpot(G); guard += 1; }
+  d.active = true; d.timer = TUNE.deliveryTime; d.drop = drop;
+  d.marker = { x: drop.x, z: drop.z, label: 'Delivery drop-off' };
+  G.banner = { text: `Parcel in hand — deliver it across town in ${TUNE.deliveryTime}s for $${TUNE.deliveryPay}.`, t: 3 };
+}
 export function updateSide(G, dt) {
   const s = G.side;
   if (!s) return;
   const p = G.player, input = G.input;
-  // Hidden packages: walk or drive over one.
   for (const pk of s.packages) {
     if (pk.got) continue;
     if (dist(p.x, p.z, pk.x, pk.z) < 34) {
@@ -63,7 +64,6 @@ export function updateSide(G, dt) {
       G.banner = { text: `Hidden package found! +$${TUNE.packagePay} (${got}/${s.packages.length})`, t: 3 };
     }
   }
-  // Taxi fares: T near the taxi stand, in a car.
   if (!s.taxi.active && p.inCar && dist(p.x, p.z, PLACES.taxiStand.x, PLACES.taxiStand.z) < 80 && take(input, 't')) startTaxiFare(G);
   if (s.taxi.active) {
     const t = s.taxi;
@@ -88,8 +88,21 @@ export function updateSide(G, dt) {
       }
     }
   }
-  // Street race: R near the race start, in a car.
   if (!s.race.active && p.inCar && dist(p.x, p.z, PLACES.raceStart.x, PLACES.raceStart.z) < 80 && take(input, 'r')) startRace(G);
+  if (!s.delivery.active && p.inCar && dist(p.x, p.z, PLACES.depot.x, PLACES.depot.z) < 80 && take(input, 'y')) startDelivery(G);
+  if (s.delivery.active) {
+    const d = s.delivery;
+    d.timer -= dt;
+    if (dist(p.x, p.z, d.drop.x, d.drop.z) < 110) {
+      d.active = false; d.marker = null;
+      p.money += TUNE.deliveryPay; G.stats.earned += TUNE.deliveryPay;
+      G.audio.cash();
+      G.banner = { text: `Delivery complete! +$${TUNE.deliveryPay}`, t: 3 };
+    } else if (d.timer <= 0) {
+      d.active = false; d.marker = null;
+      G.banner = { text: 'The parcel missed its window. The depot has more work when you are ready.', t: 3 };
+    }
+  }
   if (s.race.active) {
     const r = s.race;
     r.timer += dt;

@@ -1,7 +1,3 @@
-// Solmar Bay — keyboard and mouse input. Tracks held keys, mouse position in canvas
-// pixels, and edge-triggered presses (justPressed) consumed once per frame.
-// Listeners live on the window: the HUD overlay canvas sits above the WebGL canvas,
-// so the game canvas itself would never see the mouse.
 export function createInput(canvas) {
   const input = { keys: new Set(), justPressed: new Set(), mouse: { x: 0, y: 0, down: false }, mouseClicked: false };
   const key = (e) => e.key.length === 1 ? e.key.toLowerCase() : e.key;
@@ -26,9 +22,6 @@ export function createInput(canvas) {
 }
 export function pressed(input, ...names) { return names.some((n) => input.keys.has(n)); }
 export function justPressed(input, ...names) { return names.some((n) => input.justPressed.has(n)); }
-// Consume an edge-triggered press: true once, then it is gone — even if the fixed-step
-// loop runs the simulation twice in one frame. This is what the game uses for E, Q,
-// F, B, the shop keys, T and R; handleKeys uses it for the menu keys.
 export function take(input, ...names) {
   const hit = names.some((n) => input.justPressed.has(n));
   for (const n of names) input.justPressed.delete(n);

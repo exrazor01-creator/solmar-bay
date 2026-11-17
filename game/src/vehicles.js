@@ -1,17 +1,10 @@
-// Solmar Bay — the vehicles that are not ordinary cars: the flyable helicopter, the
-// drivable boat, the police helicopter that hunts at four stars, and the roadblocks
-// the force throws across the road when the heat peaks. Helis and boats live in
-// G.cars alongside cars, so the render, damage and wanted code all see them.
-// A heli's `y` IS its altitude; a boat's `y` is 0 on the water.
 import { CAR_STATS, TUNE, WORLD, WATER_Z } from './config.js';
 import { clamp, dist, angleDiff } from './random.js';
 import { collideCircle, nearestIntersection } from './world.js';
 import { damageCar, addParticles, spawnBullet3D } from './combat.js';
 import { spawnCar } from './traffic.js';
 import { take } from './input.js';
-
 let nextHeliId = 9000;
-
 export function spawnHeli(G, x, z, driver) {
   const s = CAR_STATS.heli;
   const heli = {
@@ -24,7 +17,6 @@ export function spawnHeli(G, x, z, driver) {
   G.cars.push(heli);
   return heli;
 }
-
 export function spawnBoat(G, x, z, driver) {
   const s = CAR_STATS.boat;
   const boat = {
@@ -37,9 +29,6 @@ export function spawnBoat(G, x, z, driver) {
   G.cars.push(boat);
   return boat;
 }
-
-// Fly a helicopter: W/S thrust, A/D turn, Space climb, C descend. Above the rooftops
-// (y > 25) nothing on the ground can touch it; it can only land on open ground.
 export function driveHeli(G, dt, input, pressed) {
   const p = G.player, heli = p.inCar;
   const fwd = pressed(input, 'w', 'ArrowUp') ? 1 : pressed(input, 's', 'ArrowDown') ? -1 : 0;
@@ -50,7 +39,6 @@ export function driveHeli(G, dt, input, pressed) {
   heli.speed = clamp(heli.speed, -160, heli.maxSpeed);
   const dir = heli.speed >= 0 ? 1 : -1;
   heli.angle += steer * heli.turn * dt * dir * Math.min(1, Math.abs(heli.speed) / 120 + 0.25);
-  // Climb / descend. Landing is refused over water or a building: the skids stay up.
   if (pressed(input, ' ')) heli.y = Math.min(TUNE.heliMaxAlt, heli.y + TUNE.heliClimb * dt);
   if (pressed(input, 'c')) {
     const overRoof = G.world.buildings.some((b) => heli.x >= b.x && heli.x <= b.x + b.w && heli.z >= b.z && heli.z <= b.z + b.d);
@@ -61,7 +49,6 @@ export function driveHeli(G, dt, input, pressed) {
   const nx = heli.x + Math.cos(heli.angle) * heli.speed * dt;
   const nz = heli.z + Math.sin(heli.angle) * heli.speed * dt;
   if (heli.y > 25) {
-    // Airborne: free of the street grid, clamped only to the map.
     heli.x = clamp(nx, 30, WORLD.w - 30);
     heli.z = clamp(nz, 30, WORLD.h - 30);
   } else {
@@ -90,8 +77,6 @@ export function driveHeli(G, dt, input, pressed) {
     }
   }
 }
-
-// Sail a boat: W/S throttle, A/D steer. The sea is its road; the shore stops it.
 export function driveBoat(G, dt, input, pressed) {
   const p = G.player, boat = p.inCar;
   const fwd = pressed(input, 'w', 'ArrowUp') ? 1 : pressed(input, 's', 'ArrowDown') ? -1 : 0;
@@ -104,7 +89,6 @@ export function driveBoat(G, dt, input, pressed) {
   boat.angle += steer * boat.turn * dt * dir * Math.min(1, Math.abs(boat.speed) / 100 + 0.2);
   const nx = boat.x + Math.cos(boat.angle) * boat.speed * dt;
   const nz = boat.z + Math.sin(boat.angle) * boat.speed * dt;
-  // The boat lives in the water: clamp it to the sea and let it slide along the shore.
   boat.x = clamp(nx, 30, WORLD.w - 30);
   boat.z = clamp(nz, WATER_Z + 14, WORLD.h - 14);
   if (nz < WATER_Z + 14 && Math.abs(boat.speed) > 150) {
@@ -112,7 +96,6 @@ export function driveBoat(G, dt, input, pressed) {
     addParticles(G, boat.x, 2, boat.z, 6, '#dfe4ea', 120, 0.4, 3);
   }
   p.x = boat.x; p.z = boat.z;
-  // Wake.
   boat.wakeT -= dt;
   if (Math.abs(boat.speed) > 80 && boat.wakeT <= 0) {
     boat.wakeT = 0.12;
@@ -131,16 +114,12 @@ export function driveBoat(G, dt, input, pressed) {
     }
   }
 }
-
-// The police helicopter: at four stars it lifts off, shadows the player from above
-// and opens fire in bursts. It leaves when the heat is gone and it is far away.
 export function updatePoliceHeli(G, dt) {
   const p = G.player;
   const heli = G.cars.find((c) => c.kind === 'heli' && c.driver === 'police' && !c.dead);
   if (!heli) return;
   const d = dist(heli.x, heli.z, p.x, p.z);
   if (G.wanted.stars === 0 && d > 900) { heli.dead = true; heli.driver = 'wreck'; G.audio.rotor(false); return; }
-  // Fly toward a hover point above the player.
   const want = Math.atan2(p.z - heli.z, p.x - heli.x);
   const diff = angleDiff(heli.angle, want);
   heli.angle += clamp(diff, -2.0 * dt, 2.0 * dt);
@@ -151,7 +130,6 @@ export function updatePoliceHeli(G, dt) {
   heli.z = clamp(heli.z, 30, WORLD.h - 30);
   heli.y = Math.min(80, heli.y + 40 * dt);
   heli.rotor += dt * 14;
-  // Burst fire from above when close enough.
   heli.shootCd = Math.max(0, (heli.shootCd || 0) - dt);
   if (d < 420 && heli.shootCd <= 0 && G.state === 'playing') {
     heli.shootCd = 1.5;
@@ -159,9 +137,6 @@ export function updatePoliceHeli(G, dt) {
     G.audio.shoot();
   }
 }
-
-// Throw a roadblock across the road ahead of the player: two cruisers angled across
-// the street, plus the banner. Called once when the wanted level first hits four.
 export function spawnRoadblock(G) {
   const p = G.player;
   const pa = p.inCar ? p.inCar.angle : p.angle;
@@ -179,8 +154,6 @@ export function spawnRoadblock(G) {
   G.banner = { text: 'ROADBLOCK AHEAD — the force sealed the street!', t: 3 };
   G.audio.siren(true);
 }
-
-// Per-frame vehicle updates: police heli, and the rotor hum follows the player's heli.
 export function updateVehicles(G, dt) {
   updatePoliceHeli(G, dt);
   if (G.roadblock) G.roadblock.t += dt;
@@ -188,7 +161,6 @@ export function updateVehicles(G, dt) {
   if (!heli && !G.cars.some((c) => c.kind === 'heli' && c.driver === 'police' && !c.dead)) G.audio.rotor(false);
   if (G.player.inCar && G.player.inCar.kind === 'boat') G.audio.boat(Math.abs(G.player.inCar.speed) / G.player.inCar.maxSpeed);
   else if (!G.player.inCar || G.player.inCar.kind !== 'boat') G.audio.boat(0);
-  // Parked helis sit still; their rotors idle.
   for (const c of G.cars) {
     if (c.kind === 'heli' && c.driver !== 'player' && c.driver !== 'police' && !c.dead) c.rotor += dt * 1.5;
   }

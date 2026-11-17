@@ -1,10 +1,6 @@
-// Solmar Bay — bullets, explosions, particles and damage. Everything that can hurt
-// something lives here; the caller decides who shot and why. Bullets fly in 3D
-// (x, y, z) but the hit tests stay on the ground plane plus a height check.
 import { TUNE, GUN_H } from './config.js';
 import { clamp, dist } from './random.js';
 import { parseColor } from './gl.js';
-
 export function addParticles(G, x, y, z, n, color, speed, life, size) {
   const c = parseColor(color);
   for (let i = 0; i < n; i += 1) {
@@ -20,15 +16,12 @@ export function addSkid(G, x1, z1, x2, z2) {
   G.skids.push({ x1, z1, x2, z2, life: 5 });
   if (G.skids.length > 220) G.skids.shift();
 }
-
-// A horizontal shot from a gun at height y (usually GUN_H above the ground).
 export function spawnBullet(G, x, y, z, angle, from, dmg) {
   if (G.bullets.length >= TUNE.maxBullets) return;
   G.bullets.push({ x, y, z, vx: Math.cos(angle) * TUNE.bulletSpeed, vy: 0, vz: Math.sin(angle) * TUNE.bulletSpeed, angle, life: 0.9, from, dmg: dmg || 34 });
   addParticles(G, x + Math.cos(angle) * 18, y, z + Math.sin(angle) * 18, 3, '#ffd23e', 120, 0.15, 3);
   G.camera.shake = Math.max(G.camera.shake, 2);
 }
-// A 3D shot aimed at a point (the police helicopter shoots down at the player).
 export function spawnBullet3D(G, x, y, z, tx, ty, tz, from, dmg) {
   if (G.bullets.length >= TUNE.maxBullets) return;
   const dx = tx - x, dy = ty - y, dz = tz - z, l = Math.hypot(dx, dy, dz) || 1;
@@ -36,7 +29,6 @@ export function spawnBullet3D(G, x, y, z, tx, ty, tz, from, dmg) {
   G.bullets.push({ x, y, z, vx: dx / l * sp, vy: dy / l * sp, vz: dz / l * sp, angle: Math.atan2(dz, dx), life: 1.4, from, dmg: dmg || 12 });
   G.camera.shake = Math.max(G.camera.shake, 2);
 }
-
 export function explode(G, x, z, big) {
   const r = big ? 130 : 70;
   addParticles(G, x, 12, z, big ? 46 : 22, '#ff9f43', big ? 420 : 300, 0.8, 5);
@@ -44,15 +36,12 @@ export function explode(G, x, z, big) {
   addParticles(G, x, 12, z, 12, '#feca57', 500, 0.3, 4);
   G.camera.shake = Math.max(G.camera.shake, big ? 16 : 8);
   G.audio.explosion();
-  // Splash damage to the player, cars and peds nearby.
   if (dist(G.player.x, G.player.z, x, z) < r && !G.player.inCar) damagePlayer(G, big ? 45 : 25);
   for (const c of G.cars) if (dist(c.x, c.z, x, z) < r + 20) damageCar(G, c, big ? 70 : 40);
   for (const p of G.peds) if (p.state !== 'dead' && dist(p.x, p.z, x, z) < r) damagePed(G, p, 100, x, z);
 }
-
 export function damagePlayer(G, dmg) {
   if (G.player.hp <= 0 || G.state !== 'playing') return;
-  // Armor absorbs first.
   if (G.player.armor > 0) {
     const absorbed = Math.min(G.player.armor, dmg);
     G.player.armor -= absorbed; dmg -= absorbed;
@@ -66,7 +55,6 @@ export function damagePlayer(G, dmg) {
     addParticles(G, G.player.x, 18, G.player.z, 30, '#ff6b6b', 260, 0.9, 5);
   }
 }
-
 export function damageCar(G, car, dmg) {
   if (car.hp <= 0) return;
   car.hp -= dmg;
@@ -74,13 +62,11 @@ export function damageCar(G, car, dmg) {
     car.hp = 0; car.dead = true;
     explode(G, car.x, car.z, true);
     if (car.driver === 'player') {
-      // Eject the player from the wreck.
       G.player.inCar = null; G.player.x = car.x + 40; G.player.z = car.z; G.player.hp = Math.max(1, G.player.hp - 20);
       car.driver = 'wreck';
     }
   }
 }
-
 export function damagePed(G, ped, dmg, fromX, fromZ) {
   if (ped.state === 'dead') return;
   ped.hp -= dmg;
@@ -89,7 +75,6 @@ export function damagePed(G, ped, dmg, fromX, fromZ) {
     addParticles(G, ped.x, 18, ped.z, 14, '#ff6b6b', 200, 0.6, 4);
     G.stats.kills += 1;
     if (ped.kind !== 'cop' && ped.kind !== 'guard') {
-      // Killing a civilian is a crime; police.js picks this up next frame.
       G.pendingWanted = (G.pendingWanted || 0) + 2;
     }
   } else if (fromX !== undefined) {
@@ -97,13 +82,11 @@ export function damagePed(G, ped, dmg, fromX, fromZ) {
     ped.fx = ped.x + (ped.x - fromX); ped.fz = ped.z + (ped.z - fromZ);
   }
 }
-
 export function updateBullets(G, dt) {
   for (let i = G.bullets.length - 1; i >= 0; i -= 1) {
     const b = G.bullets[i];
     b.x += b.vx * dt; b.y += b.vy * dt; b.z += b.vz * dt; b.life -= dt;
     let dead = b.life <= 0;
-    // Buildings stop bullets that fly below their roof.
     if (!dead) {
       for (const bd of G.world.buildings) {
         if (b.x >= bd.x && b.x <= bd.x + bd.w && b.z >= bd.z && b.z <= bd.z + bd.d && b.y < bd.floors * 34) {
@@ -111,7 +94,7 @@ export function updateBullets(G, dt) {
         }
       }
     }
-    if (!dead && b.y < 0) dead = true; // into the ground / sea
+    if (!dead && b.y < 0) dead = true;
     if (!dead && b.from === 'player') {
       for (const p of G.peds) {
         if (p.state !== 'dead' && b.y < 40 && dist(b.x, b.z, p.x, p.z) < 14) { damagePed(G, p, b.dmg, G.player.x, G.player.z); dead = true; break; }
@@ -131,11 +114,10 @@ export function updateBullets(G, dt) {
     }
     if (dead) G.bullets.splice(i, 1);
   }
-  // Particles age and fall.
   for (let i = G.particles.length - 1; i >= 0; i -= 1) {
     const p = G.particles[i];
     p.x += p.vx * dt; p.y += p.vy * dt; p.z += p.vz * dt;
-    p.vy -= 300 * dt; // gravity
+    p.vy -= 300 * dt;
     p.vx *= 0.96; p.vz *= 0.96;
     if (p.y < 1) { p.y = 1; p.vy = 0; }
     p.life -= dt;
