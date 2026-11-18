@@ -28,27 +28,22 @@ function matMul(a, b) {
 }
 const n3 = (v) => { const l = Math.hypot(v[0], v[1], v[2]) || 1; return [v[0] / l, v[1] / l, v[2] / l]; };
 const SKY = [
-  { t: 0.00, sky: [0.05, 0.07, 0.16], sun: [0.35, 0.40, 0.60], amb: [0.30, 0.32, 0.42], dir: [0.3, 0.6, 0.4] },
-  { t: 0.20, sky: [0.05, 0.07, 0.16], sun: [0.35, 0.40, 0.60], amb: [0.30, 0.32, 0.42], dir: [0.3, 0.6, 0.4] },
-  { t: 0.27, sky: [0.96, 0.52, 0.38], sun: [1.0, 0.55, 0.30], amb: [0.42, 0.30, 0.38], dir: [0.9, 0.25, 0.3] },
-  { t: 0.38, sky: [0.55, 0.76, 0.95], sun: [1.0, 0.95, 0.85], amb: [0.55, 0.55, 0.55], dir: [0.5, 1.0, 0.4] },
-  { t: 0.60, sky: [0.55, 0.76, 0.95], sun: [1.0, 0.95, 0.85], amb: [0.55, 0.55, 0.55], dir: [-0.4, 1.0, 0.4] },
-  { t: 0.72, sky: [0.95, 0.45, 0.32], sun: [1.0, 0.55, 0.28], amb: [0.42, 0.30, 0.38], dir: [-0.9, 0.28, 0.3] },
-  { t: 0.80, sky: [0.05, 0.07, 0.16], sun: [0.35, 0.40, 0.60], amb: [0.30, 0.32, 0.42], dir: [-0.3, 0.6, 0.4] },
-  { t: 1.00, sky: [0.05, 0.07, 0.16], sun: [0.35, 0.40, 0.60], amb: [0.30, 0.32, 0.42], dir: [-0.3, 0.6, 0.4] },
+  [0, .05, .07, .16, .35, .4, .6, .3, .32, .42, .3, .6, .4],
+  [.2, .05, .07, .16, .35, .4, .6, .3, .32, .42, .3, .6, .4],
+  [.27, .96, .52, .38, 1, .55, .3, .58, .44, .5, .9, .25, .3],
+  [.38, .55, .76, .95, 1, .95, .85, .55, .55, .55, .5, 1, .4],
+  [.6, .55, .76, .95, 1, .95, .85, .55, .55, .55, -.4, 1, .4],
+  [.72, .95, .45, .32, 1, .55, .28, .58, .44, .5, -.9, .28, .3],
+  [.8, .05, .07, .16, .35, .4, .6, .3, .32, .42, -.3, .6, .4],
+  [1, .05, .07, .16, .35, .4, .6, .3, .32, .42, -.3, .6, .4],
 ];
 export function skyAt(tod) {
-  let a = SKY[0], b = SKY[SKY.length - 1];
-  for (let i = 0; i < SKY.length - 1; i += 1) {
-    if (tod >= SKY[i].t && tod <= SKY[i + 1].t) { a = SKY[i]; b = SKY[i + 1]; break; }
-  }
-  const f = b.t === a.t ? 0 : clamp((tod - a.t) / (b.t - a.t), 0, 1);
-  const mix = (x, y) => [lerp(x[0], y[0], f), lerp(x[1], y[1], f), lerp(x[2], y[2], f)];
+  let a = SKY[0], b = SKY[7];
+  for (let i = 0; i < 7; i += 1) if (tod >= SKY[i][0] && tod <= SKY[i + 1][0]) { a = SKY[i]; b = SKY[i + 1]; break; }
+  const f = b[0] === a[0] ? 0 : clamp((tod - a[0]) / (b[0] - a[0]), 0, 1);
+  const mx = (o) => [lerp(a[o], b[o], f), lerp(a[o + 1], b[o + 1], f), lerp(a[o + 2], b[o + 2], f)];
   const night = tod < 0.22 || tod > 0.78;
-  return {
-    sky: mix(a.sky, b.sky), fog: mix(a.sky, b.sky), sun: mix(a.sun, b.sun), amb: mix(a.amb, b.amb),
-    dir: n3(mix(a.dir, b.dir)), night, fogNear: night ? 500 : 500, fogFar: night ? 2200 : 2600,
-  };
+  return { sky: mx(1), fog: mx(1), sun: mx(4), amb: mx(7), dir: n3(mx(10)), night, fogNear: 500, fogFar: night ? 2200 : 2600 };
 }
 const cCache = new Map();
 export function pCol(c) {
@@ -60,22 +55,25 @@ export function pCol(c) {
   cCache.set(c, hit);
   return hit;
 }
-const VS = `attribute vec3 aPos; attribute vec4 aColor; attribute vec3 aNormal;
+const VS = `attribute vec3 aPos; attribute vec4 aColor; attribute vec4 aNormal;
 uniform mat4 uVP; uniform vec3 uCP; uniform vec3 uLD; uniform vec3 uLC;
 uniform vec3 uAM; uniform float uFN; uniform float uFF;
-varying vec4 vColor; varying float vFog;
+varying vec4 vColor; varying float vFog; varying float vSpec;
 void main(){
-  vec3 n = normalize(aNormal);
+  vec3 n = normalize(aNormal.xyz);
   float diff = max(dot(n, uLD), 0.0);
   vec3 lit = aColor.rgb * (uAM + uLC * diff);
   vColor = vec4(lit, aColor.a);
+  vec3 V = normalize(uCP - aPos);
+  vec3 H = normalize(uLD + V);
+  vSpec = pow(max(dot(n, H), 0.0), 26.0) * aNormal.w;
   float d = distance(aPos, uCP);
   vFog = clamp((d - uFN) / (uFF - uFN), 0.0, 1.0);
   gl_Position = uVP * vec4(aPos, 1.0);
 }`;
 const FS = `precision mediump float;
-varying vec4 vColor; varying float vFog; uniform vec3 uFC;
-void main(){ vec3 c = mix(vColor.rgb, uFC, vFog); gl_FragColor = vec4(c, vColor.a); }`;
+varying vec4 vColor; varying float vFog; varying float vSpec; uniform vec3 uFC;
+void main(){ vec3 c = mix(vColor.rgb, uFC, vFog) + vSpec * (1.0 - vFog) * 0.5; gl_FragColor = vec4(c, vColor.a); }`;
 export function mkRenderer(canvas) {
   const gl = canvas.getContext('webgl', { preserveDrawingBuffer: true, antialias: true, alpha: false });
   if (!gl) throw new Error('WebGL is not available');
@@ -104,7 +102,7 @@ export function mkRenderer(canvas) {
   const R = {
     gl, w: canvas.width, h: canvas.height, fov: 60 * Math.PI / 180, aspect: canvas.width / canvas.height,
     eye: [0, 0, 0], fwd: [0, 0, -1], right: [1, 0, 0], up: [0, 1, 0], tanHalf: Math.tan((60 * Math.PI / 180) / 2),
-    pos: [], col: [], nrm: [], idx: [], vc: 0, tris: 0,
+    pos: [], col: [], nrm: [], idx: [], vc: 0, tris: 0, sh: 0,
     setCamera(eye, target) {
       this.eye = eye;
       const view = mLook(eye, target, [0, 1, 0]);
@@ -132,7 +130,7 @@ export function mkRenderer(canvas) {
     vert(p, c, n) {
       this.pos.push(p[0], p[1], p[2]);
       this.col.push(c[0], c[1], c[2], c[3]);
-      this.nrm.push(n[0], n[1], n[2]);
+      this.nrm.push(n[0], n[1], n[2], n.length > 3 ? n[3] : this.sh);
       this.vc += 1;
       if (this.vc > 58000) this.flush();
     },
@@ -209,6 +207,49 @@ export function mkRenderer(canvas) {
         this.idx.push(o, o + 1, o + 2); this.tris += 1;
       }
     },
+    lathe(x, y, z, pr, c, s, ry) {
+      const q = pCol(c), n = pr.length / 2, co = Math.cos(ry || 0), si = Math.sin(ry || 0);
+      const P = (j, k) => {
+        const a = k / s * 6.283, r = pr[j * 2];
+        return [x + Math.cos(a) * r * co - Math.sin(a) * r * si, y + pr[j * 2 + 1], z + Math.cos(a) * r * si + Math.sin(a) * r * co];
+      };
+      const N = (j) => {
+        const a = Math.max(0, j - 1), b = Math.min(n - 1, j + 1);
+        const dr = pr[b * 2] - pr[a * 2], dh = pr[b * 2 + 1] - pr[a * 2 + 1], l = Math.hypot(dr, dh) || 1;
+        return [dh / l, -dr / l];
+      };
+      for (let j = 0; j < n - 1; j += 1) for (let k = 0; k < s; k += 1) {
+        const k2 = (k + 1) % s, a = (k + 0.5) / s * 6.283;
+        const nr = (N(j)[0] + N(j + 1)[0]) / 2, ny = (N(j)[1] + N(j + 1)[1]) / 2;
+        const ca = Math.cos(a), sa = Math.sin(a);
+        this.quad(P(j, k), P(j, k2), P(j + 1, k2), P(j + 1, k), q, [nr * ca * co - nr * sa * si, ny, nr * ca * si + nr * sa * co]);
+      }
+    },
+    hull(x, y, z, a, sc, c) {
+      const q = pCol(c), fx = Math.cos(a), fz = Math.sin(a), rx = -fz, rz = fx, n = sc.length / 4;
+      const P = (i, s, yy) => [x + fx * sc[i * 4] + rx * s * sc[i * 4 + 1], y + yy, z + fz * sc[i * 4] + rz * s * sc[i * 4 + 1]];
+      for (let i = 0; i < n - 1; i += 1) {
+        const sl = (sc[(i + 1) * 4 + 3] - sc[i * 4 + 3]) / ((sc[(i + 1) * 4] - sc[i * 4]) || 1), nl = 1 / Math.hypot(sl, 1);
+        this.quad(P(i, -1, sc[i * 4 + 3]), P(i, 1, sc[i * 4 + 3]), P(i + 1, 1, sc[(i + 1) * 4 + 3]), P(i + 1, -1, sc[(i + 1) * 4 + 3]), q, [-sl * nl * fx, nl, -sl * nl * fz]);
+        this.quad(P(i, 1, sc[i * 4 + 2]), P(i, 1, sc[i * 4 + 3]), P(i + 1, 1, sc[(i + 1) * 4 + 3]), P(i + 1, 1, sc[(i + 1) * 4 + 2]), q, [rx, 0, rz]);
+        this.quad(P(i, -1, sc[i * 4 + 3]), P(i, -1, sc[i * 4 + 2]), P(i + 1, -1, sc[(i + 1) * 4 + 2]), P(i + 1, -1, sc[(i + 1) * 4 + 3]), q, [-rx, 0, -rz]);
+      }
+      this.quad(P(0, -1, sc[2]), P(0, 1, sc[2]), P(0, 1, sc[3]), P(0, -1, sc[3]), q, [-fx, 0, -fz]);
+      const e = n - 1;
+      this.quad(P(e, 1, sc[e * 4 + 2]), P(e, -1, sc[e * 4 + 2]), P(e, -1, sc[e * 4 + 3]), P(e, 1, sc[e * 4 + 3]), q, [fx, 0, fz]);
+    },
+    tube(x1, y1, z1, x2, y2, z2, r, c, s) {
+      const q = pCol(c), d = n3([x2 - x1, y2 - y1, z2 - z1]);
+      let u = [-d[2], 0, d[0]];
+      if (Math.hypot(u[0], u[1], u[2]) < 0.01) u = [1, 0, 0];
+      u = n3(u);
+      const v = [d[1] * u[2] - d[2] * u[1], d[2] * u[0] - d[0] * u[2], d[0] * u[1] - d[1] * u[0]];
+      for (let k = 0; k < s; k += 1) {
+        const a = k / s * 6.283, b = (k + 1) / s * 6.283, m = (a + b) / 2;
+        const P = (t, x, y, z) => [x + (u[0] * Math.cos(t) + v[0] * Math.sin(t)) * r, y + (u[1] * Math.cos(t) + v[1] * Math.sin(t)) * r, z + (u[2] * Math.cos(t) + v[2] * Math.sin(t)) * r];
+        this.quad(P(a, x1, y1, z1), P(b, x1, y1, z1), P(b, x2, y2, z2), P(a, x2, y2, z2), q, [u[0] * Math.cos(m) + v[0] * Math.sin(m), u[1] * Math.cos(m) + v[1] * Math.sin(m), u[2] * Math.cos(m) + v[2] * Math.sin(m)]);
+      }
+    },
     rayGround(mx, my) {
       const nx = (mx / this.w) * 2 - 1, ny = 1 - (my / this.h) * 2;
       const dx = this.fwd[0] + this.right[0] * nx * this.tanHalf * this.aspect + this.up[0] * ny * this.tanHalf;
@@ -239,7 +280,7 @@ export function mkRenderer(canvas) {
       gl.bindBuffer(gl.ARRAY_BUFFER, bufNrm);
       gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(this.nrm), gl.DYNAMIC_DRAW);
       gl.enableVertexAttribArray(A.nrm);
-      gl.vertexAttribPointer(A.nrm, 3, gl.FLOAT, false, 0, 0);
+      gl.vertexAttribPointer(A.nrm, 4, gl.FLOAT, false, 0, 0);
       gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, bufIdx);
       gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(this.idx), gl.DYNAMIC_DRAW);
       gl.drawElements(gl.TRIANGLES, this.idx.length, gl.UNSIGNED_SHORT, 0);
